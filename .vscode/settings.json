@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git config --global http\\.postBuffer 524288000$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
