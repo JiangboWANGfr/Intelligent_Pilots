@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火山灰云规避决策系统 - 3D可视化</title>
+
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        #app { width: 100vw; height: 100vh; position: relative; }
+        #cesiumContainer { width: 100%; height: 100%; }
+
+        #controlPanel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 340px;
+            max-height: calc(100vh - 20px);
+            background: rgba(42, 42, 54, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            color: #fff;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 999;
+        }
+        #controlPanel h2 { font-size: 18px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444; text-align: center; }
+
+        .panel-section { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+        .panel-section:last-child { border-bottom: none; margin-bottom: 0; }
+        .panel-section h3 { font-size: 14px; color: #aaa; margin-bottom: 10px; }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            background: #3a3a4a;
+            color: #fff;
+        }
+        .btn:hover { background: #4a4a5a; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: #4a90d9; }
+        .btn-primary:hover { background: #5aa0e9; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-full { width: 100%; margin-top: 8px; }
+
+        .btn-group { display: flex; gap: 5px; }
+        .btn-group .btn { flex: 1; }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .checkbox-label input { width: 16px; height: 16px; cursor: pointer; }
+
+        .slider-container { margin: 10px 0; }
+        .slider-container label { display: block; font-size: 12px; margin-bottom: 5px; color: #ccc; }
+        .slider-container input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #555;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4a90d9;
+            cursor: pointer;
+        }
+
+        .progress-container { margin: 10px 0; }
+        .progress-container label { font-size: 12px; color: #ccc; }
+        .progress-container input[type="range"] { width: 100%; margin: 5px 0; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 13px;
+            border-bottom: 1px solid #333;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-row .label { color: #999; }
+
+        .legend { display: flex; flex-direction: column; gap: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+        .legend-color {
+            width: 20px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        #statsPanel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 200px;
+            background: rgba(42, 42, 54, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 999;
+        }
+        #statsPanel h3 { font-size: 14px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #444; }
+        .stat-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+        .stat-label { color: #999; }
+
+        #dataStatus { display: inline-block; margin-left: 10px; font-size: 12px; color: #999; }
+        #dataStatus.loaded { color: #4caf50; }
+        #dataStatus.error { color: #f44336; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .field-group { display: flex; flex-direction: column; gap: 4px; }
+        .field-group label { font-size: 12px; color: #bbb; }
+        .input-control {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1f2432;
+            color: #fff;
+            font-size: 12px;
+        }
+        .input-control:focus { border-color: #4a90d9; outline: none; }
+        .muted-text { display: block; margin-top: 8px; font-size: 12px; color: #9aa4b2; word-break: break-all; }
+        .status-note { margin-top: 8px; font-size: 12px; color: #9aa4b2; line-height: 1.5; }
+        .status-note.success { color: #4caf50; }
+        .status-note.error { color: #f44336; }
+        .status-note.busy { color: #ffd54f; }
+        .result-card {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #3c4358;
+            border-radius: 6px;
+            background: rgba(17, 20, 30, 0.7);
+        }
+        .link-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .link-list a { color: #7cc7ff; text-decoration: none; font-size: 12px; }
+        .link-list a:hover { text-decoration: underline; }
+        .media-preview {
+            display: none;
+            width: 100%;
+            margin-top: 8px;
+            border-radius: 6px;
+            background: #161a26;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        #controlPanel::-webkit-scrollbar { width: 6px; }
+        #controlPanel::-webkit-scrollbar-track { background: #2a2a36; }
+        #controlPanel::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        #controlPanel::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        @media (max-width: 768px) {
+            #controlPanel { width: 100%; max-height: 40vh; top: auto; bottom: 0; left: 0; border-radius: 8px 8px 0 0; }
+            #statsPanel { width: calc(100% - 20px); top: 10px; right: 10px; }
+            .form-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="cesiumContainer"></div>
+
+        <div id="controlPanel">
+            <h2>火山灰云规避决策系统</h2>
+
+            <div class="panel-section">
+                <h3>现实图验证动画</h3>
+                <button id="selectValidationImageBtn" class="btn btn-primary btn-full" onclick="document.getElementById('validationImageInput').click()">选择现实图</button>
+                <input type="file" id="validationImageInput" accept="image/*" style="display:none" onchange="handleValidationImageSelect(event)">
+                <span id="validationFileName" class="muted-text">未选择图片</span>
+                <img id="validationImagePreview" class="media-preview" alt="现实图预览">
+                <div class="form-grid" style="margin-top:10px;">
+                    <div class="field-group">
+                        <label for="validationSceneName">场景名称</label>
+                        <input id="validationSceneName" class="input-control" type="text" value="image_validation_scene">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationFallbackLimit">兜底浓度上限</label>
+                        <input id="validationFallbackLimit" class="input-control" type="number" step="0.01" value="0.30">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationCenterLat">中心纬度</label>
+                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="35.0000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationCenterLon">中心经度</label>
+                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="120.0000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationSpanLat">纬向跨度</label>
+                        <input id="validationSpanLat" class="input-control" type="number" step="0.01" value="2.00">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationSpanLon">经向跨度</label>
+                        <input id="validationSpanLon" class="input-control" type="number" step="0.01" value="2.00">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationStartLat">起点纬度</label>
+                        <input id="validationStartLat" class="input-control" type="number" step="0.0001" value="34.3000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationStartLon">起点经度</label>
+                        <input id="validationStartLon" class="input-control" type="number" step="0.0001" value="119.3000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationTargetLat">终点纬度</label>
+                        <input id="validationTargetLat" class="input-control" type="number" step="0.0001" value="35.7000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationTargetLon">终点经度</label>
+                        <input id="validationTargetLon" class="input-control" type="number" step="0.0001" value="120.7000">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationFps">动画 FPS</label>
+                        <input id="validationFps" class="input-control" type="number" step="1" value="12">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationMaxFrames">最大帧数</label>
+                        <input id="validationMaxFrames" class="input-control" type="number" step="1" value="180">
+                    </div>
+                </div>
+                <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
+                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runValidationFromImage()">生成验证动画</button>
+                <div id="validationStatus" class="status-note">上传现实图后，可直接生成验证动画并自动加载到地图。</div>
+                <div id="validationResultCard" class="result-card">
+                    <div class="info-row"><span class="label">规划方式:</span><span id="validationMethod">--</span></div>
+                    <div class="info-row"><span class="label">回退情况:</span><span id="validationFallback">--</span></div>
+                    <div class="info-row"><span class="label">场景名称:</span><span id="validationScene">--</span></div>
+                    <div class="info-row"><span class="label">动画帧数:</span><span id="validationFrames">--</span></div>
+                    <div class="link-list">
+                        <a id="validationGifLink" href="#" target="_blank" rel="noopener" style="display:none">打开 GIF 动画</a>
+                        <a id="validationJsonLink" href="#" target="_blank" rel="noopener" style="display:none">打开验证 JSON</a>
+                        <a id="validationPlotLink" href="#" target="_blank" rel="noopener" style="display:none">打开路径图</a>
+                    </div>
+                    <img id="validationGifPreview" class="media-preview" alt="验证 GIF 预览">
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>数据加载</h3>
+                <button id="loadDataBtn" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">加载数据</button>
+                <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileSelect(event)">
+                <span id="dataStatus">未加载</span>
+                <button id="sampleBtn" class="btn btn-success btn-full" onclick="loadSampleData()">加载示例数据</button>
+                <button id="clearBtn" class="btn btn-full" onclick="clearAllData()" style="background:#666;margin-top:5px">清除所有数据</button>
+            </div>
+
+            <div class="panel-section">
+                <h3>图层控制</h3>
+                <label class="checkbox-label"><input type="checkbox" id="showCloud" checked onchange="toggleCloud(this.checked)">显示火山灰云</label>
+                <label class="checkbox-label"><input type="checkbox" id="showOriginalRoute" checked onchange="toggleOriginalRoute(this.checked)">显示原始航线</label>
+                <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示规划路径</label>
+                <label class="checkbox-label"><input type="checkbox" id="showAircraft" checked onchange="toggleAircraft(this.checked)">显示飞机位置</label>
+            </div>
+
+            <div class="panel-section">
+                <h3>飞行仿真</h3>
+                <div class="btn-group">
+                    <button id="playBtn" class="btn" onclick="playSimulation()" style="background:#28a745">▶ 播放</button>
+                    <button id="pauseBtn" class="btn" onclick="pauseSimulation()" style="background:#ffc107;color:#333">⏸ 暂停</button>
+                    <button id="resetBtn" class="btn" onclick="resetSimulation()" style="background:#dc3545">⏹ 重置</button>
+                </div>
+                <div class="slider-container">
+                    <label>播放速度: <span id="speedValue">1.0</span>x</label>
+                    <input type="range" id="speedSlider" min="0.5" max="4" step="0.5" value="1" oninput="setSpeed(this.value)">
+                </div>
+                <div class="progress-container">
+                    <label>进度: <span id="progressValue">0%</span></label>
+                    <input type="range" id="progressSlider" min="0" max="100" value="0" oninput="seekTo(this.value)">
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>飞机状态</h3>
+                <div class="info-row"><span class="label">位置:</span><span id="positionInfo">--</span></div>
+                <div class="info-row"><span class="label">高度:</span><span id="altitudeInfo">--</span></div>
+                <div class="info-row"><span class="label">速度:</span><span id="speedInfo">--</span></div>
+                <div class="info-row"><span class="label">浓度:</span><span id="concentrationInfo">--</span></div>
+                <div class="info-row"><span class="label">进度:</span><span id="flightProgress">--</span></div>
+            </div>
+
+            <div class="panel-section">
+                <h3>视角控制</h3>
+                <div class="btn-group">
+                    <button class="btn" onclick="viewOverhead()">俯视</button>
+                    <button class="btn" onclick="viewFollow()">跟随</button>
+                    <button class="btn" onclick="viewFree()">自由</button>
+                </div>
+                <button class="btn btn-full" onclick="zoomToCloud()">定位到云团</button>
+            </div>
+
+            <div class="panel-section">
+                <h3>危险等级图例</h3>
+                <div class="legend">
+                    <div class="legend-item"><span class="legend-color" style="background:#00FF00"></span><span>安全 (&lt;0.2)</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#FFFF00"></span><span>低危 (0.2-0.5)</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#FFA500"></span><span>中危 (0.5-0.8)</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#FF0000"></span><span>高危 (&gt;0.8)</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="statsPanel">
+            <h3>航线统计</h3>
+            <div class="stat-item"><span class="stat-label">路径长度:</span><span id="statDistance">--</span></div>
+            <div class="stat-item"><span class="stat-label">最大浓度:</span><span id="statMaxConc">--</span></div>
+            <div class="stat-item"><span class="stat-label">航线偏离:</span><span id="statDeviation">--</span></div>
+        </div>
+    </div>
+
+<script>
+const USE_FREE_OSM = false;
+
+let viewer = null;
+let cloudEntities = [];
+let originalRouteEntity = null;
+let plannedPathEntity = null;
+let routeMarkerEntities = [];
+let waypointEntities = [];
+let aircraftEntity = null;
+
+let trajectory = [];
+let concentrationAlongPath = [];
+let currentIndex = 0;
+let isPlaying = false;
+let speed = 1.0;
+let animationId = null;
+let plannedPathVisible = true;
+
+let currentCenterLon = 120;
+let currentCenterLat = 35;
+let validationImageFile = null;
+let validationPreviewUrl = null;
+let validationBaseConfig = null;
+let latestValidationResponse = null;
+
+// ===== 动态云状态 =====
+let cloudAnimStartTime = null;      // 云动画开始时间（ms）
+let cloudWindAngle = 0.5;           // 风向（弧度）
+let cloudWindSpeedDegPerSec = 0.04; // 风速（度/秒）
+let cloudExpansionRate = 0.00015;   // 扩散速率（无量纲/秒）
+// 预计算的云形基础坐标（相对中心，避免每帧重算形状）
+let cloudBaseCoords = {};           // { level: [relLon, relLat, ...] }
+const cloudDangerColors = {
+    safe: Cesium.Color.fromCssColorString('#00FF00').withAlpha(0.32),
+    low: Cesium.Color.fromCssColorString('#FFFF00').withAlpha(0.48),
+    medium: Cesium.Color.fromCssColorString('#FFA500').withAlpha(0.58),
+    high: Cesium.Color.fromCssColorString('#FF0000').withAlpha(0.72)
+};
+const cloudAltitudeOffset = { safe: 0, low: 150, medium: 300, high: 450 };
+const cloudZoneOrder = ['safe', 'low', 'medium', 'high'];
+const cloudInnerZoneMap = { safe: 'low', low: 'medium', medium: 'high', high: null };
+
+// ===== 不规则云形辅助函数 =====
+function seededRandom(seed) {
+    let s = (seed ^ 0x12345678) | 1;
+    return function() {
+        s ^= (s << 13); s ^= (s >>> 17); s ^= (s << 5);
+        return (s >>> 0) / 0xFFFFFFFF;
+    };
+}
+
+/**
+ * 生成不规则云形多边形坐标
+ * @param {number} centerLon - 中心经度
+ * @param {number} centerLat - 中心纬度
+ * @param {number} baseRadius - 基础半径（度）
+ * @param {number} numPoints - 顶点数
+ * @param {number} seed - 随机种子（同一云体各区域用相同种子保证形状一致性）
+ * @param {number} windAngle - 风向角（弧度），控制拉伸方向
+ * @returns {number[]} Cesium.fromDegreesArray 格式坐标数组
+ */
+function generateIrregularCloudCoords(centerLon, centerLat, baseRadius, numPoints, seed, windAngle) {
+    const rng = seededRandom(seed);
+    const wd = windAngle || 0.35;
+    // 生成控制点（平滑扰动因子）
+    const numCP = 18;
+    const cpFactors = [];
+    for (let i = 0; i < numCP; i++) {
+        cpFactors.push(0.68 + rng() * 0.64); // 0.68 ~ 1.32
+    }
+    const coords = [];
+    for (let i = 0; i <= numPoints; i++) {
+        const angle = (i / numPoints) * 2 * Math.PI;
+        const cpPos = (angle / (2 * Math.PI)) * numCP;
+        const cpA = Math.floor(cpPos) % numCP;
+        const cpB = (cpA + 1) % numCP;
+        const t = cpPos - Math.floor(cpPos);
+        // smoothstep 插值，避免锯齿
+        const ts = t * t * (3 - 2 * t);
+        const sf = cpFactors[cpA] * (1 - ts) + cpFactors[cpB] * ts;
+        const r = baseRadius * sf;
+        // 风向拉伸：沿风向轴拉长，垂直方向压缩，模拟真实灰云形态
+        const localAngle = angle - wd;
+        const stretchLon = 1.30 + 0.12 * Math.cos(localAngle);
+        const stretchLat = 0.80 - 0.10 * Math.cos(localAngle);
+        coords.push(centerLon + r * Math.cos(angle) * stretchLon);
+        coords.push(centerLat + r * Math.sin(angle) * stretchLat);
+    }
+    return coords;
+}
+
+function transformCloudCoords(baseCoords, centerLon, centerLat, radiusScale, driftX, driftY, scale) {
+    const finalCoords = [];
+    for (let i = 0; i < baseCoords.length; i += 2) {
+        finalCoords.push(centerLon + baseCoords[i] * radiusScale * scale + driftX);
+        finalCoords.push(centerLat + baseCoords[i + 1] * radiusScale * scale + driftY);
+    }
+    return finalCoords;
+}
+
+function buildCloudHierarchy(baseCoords, centerLon, centerLat, outerRadius, innerRadius, driftX, driftY, scale) {
+    const outerCoords = transformCloudCoords(baseCoords, centerLon, centerLat, outerRadius, driftX, driftY, scale);
+    if (!innerRadius) {
+        return new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(outerCoords));
+    }
+    const innerCoords = transformCloudCoords(baseCoords, centerLon, centerLat, innerRadius, driftX, driftY, scale);
+    return new Cesium.PolygonHierarchy(
+        Cesium.Cartesian3.fromDegreesArray(outerCoords),
+        [new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(innerCoords))]
+    );
+}
+
+function createDynamicCloudLayers(centerLon, centerLat, zoneRadii, baseSeed, windAngle, windSpeed, expansionRate, points) {
+    const numPoints = points || 80;
+    cloudBaseCoords = {
+        base: generateIrregularCloudCoords(0, 0, 1, numPoints, baseSeed, windAngle),
+        radii: zoneRadii
+    };
+    cloudWindAngle = windAngle;
+    cloudWindSpeedDegPerSec = windSpeed;
+    cloudExpansionRate = expansionRate;
+    cloudAnimStartTime = true;
+
+    cloudZoneOrder.forEach(level => {
+        const dynamicHierarchy = new Cesium.CallbackProperty(() => {
+            if (!cloudAnimStartTime) return new Cesium.PolygonHierarchy();
+            const elapsed = currentIndex * 0.12;
+            const dx = cloudWindSpeedDegPerSec * elapsed * Math.cos(cloudWindAngle);
+            const dy = cloudWindSpeedDegPerSec * elapsed * Math.sin(cloudWindAngle) * 0.7;
+            const scale = 1 + cloudExpansionRate * elapsed;
+            const innerLevel = cloudInnerZoneMap[level];
+            const innerRadius = innerLevel ? zoneRadii[innerLevel] : null;
+            return buildCloudHierarchy(
+                cloudBaseCoords.base,
+                centerLon,
+                centerLat,
+                zoneRadii[level],
+                innerRadius,
+                dx,
+                dy,
+                scale
+            );
+        }, false);
+
+        cloudEntities.push(viewer.entities.add({
+            name: `Cloud ${level}`,
+            polygon: {
+                hierarchy: dynamicHierarchy,
+                height: 10000 + cloudAltitudeOffset[level],
+                extrudedHeight: 10000 + cloudAltitudeOffset[level] + 600,
+                material: cloudDangerColors[level],
+                outline: true,
+                outlineColor: cloudDangerColors[level].withAlpha(0.95),
+                outlineWidth: 1
+            }
+        }));
+    });
+}
+
+function initCesium() {
+    let imageryProvider, terrainProvider;
+
+    if (USE_FREE_OSM) {
+        imageryProvider = new Cesium.OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/'
+        });
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+    } else {
+        // 使用 Cesium 内置 NaturalEarth 底图，无需外部地图服务，不依赖网络连接
+        imageryProvider = new Cesium.TileMapServiceImageryProvider({
+            url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+        });
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+    }
+
+    viewer = new Cesium.Viewer('cesiumContainer', {
+        imageryProvider: imageryProvider,
+        terrainProvider: terrainProvider,
+        animation: false,
+        timeline: false,
+        homeButton: true,
+        sceneModePicker: true,
+        baseLayerPicker: false,
+        navigationHelpButton: false,
+        fullscreenButton: true,
+        geocoder: true,
+        infoBox: true,
+        selectionIndicator: true,
+        scene3DOnly: true,
+        shouldAnimate: true
+    });
+
+    viewer._cesiumWidget._creditContainer.style.display = "none";
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+    viewer.scene.skyAtmosphere.show = true;
+
+    viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(120, 30, 3000000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+        duration: 2
+    });
+}
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const raw = JSON.parse(e.target.result);
+            processData(raw);
+            updateDataStatus('loaded', '已加载');
+        } catch (err) {
+            alert('JSON解析错误: ' + err.message);
+            updateDataStatus('error', '加载失败');
+        }
+    };
+    reader.readAsText(file);
+
+    // 重置文件输入框，允许重复选择同一文件
+    event.target.value = '';
+}
+
+function getNumericInputValue(id, fallback) {
+    const value = Number(document.getElementById(id).value);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function setValidationStatus(text, status = '') {
+    const el = document.getElementById('validationStatus');
+    el.textContent = text;
+    el.className = status ? `status-note ${status}` : 'status-note';
+}
+
+function withCacheBust(url) {
+    if (!url) return '';
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${Date.now()}`;
+}
+
+function setValidationLink(linkId, url, text) {
+    const el = document.getElementById(linkId);
+    if (url) {
+        el.href = withCacheBust(url);
+        el.textContent = text;
+        el.style.display = 'block';
+        return;
+    }
+    el.removeAttribute('href');
+    el.style.display = 'none';
+}
+
+function handleValidationImageSelect(event) {
+    const file = event.target.files[0] || null;
+    validationImageFile = file;
+
+    const fileNameEl = document.getElementById('validationFileName');
+    const previewEl = document.getElementById('validationImagePreview');
+
+    if (validationPreviewUrl) {
+        URL.revokeObjectURL(validationPreviewUrl);
+        validationPreviewUrl = null;
+    }
+
+    if (!file) {
+        fileNameEl.textContent = '未选择图片';
+        previewEl.removeAttribute('src');
+        previewEl.style.display = 'none';
+        setValidationStatus('请先选择一张现实图。');
+        return;
+    }
+
+    validationPreviewUrl = URL.createObjectURL(file);
+    fileNameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    previewEl.src = validationPreviewUrl;
+    previewEl.style.display = 'block';
+    setValidationStatus('图片已选择，可直接生成验证动画。');
+}
+
+function applySuggestedRoute() {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
+    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
+    const spanLat = getNumericInputValue('validationSpanLat', 2.0);
+    const spanLon = getNumericInputValue('validationSpanLon', 2.0);
+
+    document.getElementById('validationStartLat').value = (centerLat - spanLat * 0.35).toFixed(4);
+    document.getElementById('validationStartLon').value = (centerLon - spanLon * 0.35).toFixed(4);
+    document.getElementById('validationTargetLat').value = (centerLat + spanLat * 0.35).toFixed(4);
+    document.getElementById('validationTargetLon').value = (centerLon + spanLon * 0.35).toFixed(4);
+}
+
+function buildValidationConfigPayload() {
+    const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 35.0);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', 120.0);
+    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 2.0);
+    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 2.0);
+    return payload;
+}
+
+function updateValidationResultPanel(result) {
+    latestValidationResponse = result;
+
+    const card = document.getElementById('validationResultCard');
+    const pathData = result.path_data || {};
+    const validationInfo = pathData.validation_info || {};
+    const animationExport = result.animation_export || validationInfo.animation_export || {};
+
+    document.getElementById('validationMethod').textContent = pathData.planning_method || '--';
+    document.getElementById('validationFallback').textContent = validationInfo.used_fallback ? `已启用 (${validationInfo.fallback_reason || 'fallback'})` : '未启用';
+    document.getElementById('validationScene').textContent = pathData.scene_name || validationInfo.scene_name || '--';
+    document.getElementById('validationFrames').textContent = animationExport.frame_count || (result.animation_manifest && result.animation_manifest.frame_count) || '--';
+
+    setValidationLink('validationGifLink', result.animation_gif_url, '打开 GIF 动画');
+    setValidationLink('validationJsonLink', result.output_file_url, '打开验证 JSON');
+    setValidationLink('validationPlotLink', result.plot_file_url, '打开路径图');
+
+    const gifPreview = document.getElementById('validationGifPreview');
+    if (result.animation_gif_url) {
+        gifPreview.src = withCacheBust(result.animation_gif_url);
+        gifPreview.style.display = 'block';
+    } else {
+        gifPreview.removeAttribute('src');
+        gifPreview.style.display = 'none';
+    }
+
+    card.style.display = 'block';
+}
+
+async function runValidationFromImage() {
+    if (!validationImageFile) {
+        setValidationStatus('请先选择一张现实图。', 'error');
+        return;
+    }
+
+    const runButton = document.getElementById('runValidationBtn');
+    const originalText = runButton.textContent;
+    runButton.disabled = true;
+    runButton.textContent = '生成中...';
+    setValidationStatus('正在上传现实图并生成验证动画...', 'busy');
+
+    try {
+        const formData = new FormData();
+        formData.append('image_file', validationImageFile);
+        formData.append('web_request', 'true');
+        formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
+        formData.append('start_lat', String(getNumericInputValue('validationStartLat', 34.3)));
+        formData.append('start_lon', String(getNumericInputValue('validationStartLon', 119.3)));
+        formData.append('target_lat', String(getNumericInputValue('validationTargetLat', 35.7)));
+        formData.append('target_lon', String(getNumericInputValue('validationTargetLon', 120.7)));
+        formData.append('fallback_concentration_limit', String(getNumericInputValue('validationFallbackLimit', 0.3)));
+        formData.append('animation_fps', String(Math.max(1, Math.round(getNumericInputValue('validationFps', 12)))));
+        formData.append('animation_max_frames', String(Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)))));
+        formData.append('config', JSON.stringify(buildValidationConfigPayload()));
+
+        const response = await fetch('/api/validate-image', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '验证失败');
+        }
+
+        updateValidationResultPanel(result);
+        if (result.path_data) {
+            processData({
+                path_data: result.path_data,
+                cloud_info: result.path_data.cloud_info || null,
+                validation_info: result.path_data.validation_info || null
+            });
+        }
+        setValidationStatus(result.message || '验证动画生成完成。', 'success');
+    } catch (error) {
+        console.error('Validation request failed:', error);
+        setValidationStatus(`验证失败：${error.message}`, 'error');
+    } finally {
+        runButton.disabled = false;
+        runButton.textContent = originalText;
+    }
+}
+
+function processData(raw) {
+    console.log('=== Processing new data ===');
+    console.log('Data structure:', Object.keys(raw));
+    clearAllData();
+
+    // 等待清理完成
+    setTimeout(() => {
+        console.log('Starting data processing after clear');
+        let data;
+        if (raw.path_data && raw.path_data.waypoints) {
+            console.log('Processing path_data format');
+            const waypoints = raw.path_data.waypoints;
+            console.log('Waypoints count:', waypoints.length);
+
+            if (waypoints.length === 0) {
+                console.error('No waypoints in data');
+                updateDataStatus('error', '数据无效');
+                return;
+            }
+
+            const startWp = waypoints[0];
+            const endWp = waypoints[waypoints.length - 1];
+            const lats = waypoints.map(w => w.latitude);
+            const lons = waypoints.map(w => w.longitude);
+
+            // 优先使用 cloud_info 中的精确云中心坐标，否则退回到路径边界框中点
+            if (raw.cloud_info && raw.cloud_info.center_lat !== undefined) {
+                currentCenterLat = raw.cloud_info.center_lat;
+                currentCenterLon = raw.cloud_info.center_lon;
+                console.log('Using cloud_info center:', currentCenterLon, currentCenterLat);
+            } else {
+                currentCenterLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                currentCenterLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+                console.log('Calculated center from bbox:', currentCenterLon, currentCenterLat);
+            }
+
+            console.log('Lat range:', Math.min(...lats), '-', Math.max(...lats));
+            console.log('Lon range:', Math.min(...lons), '-', Math.max(...lons));
+
+            trajectory = waypoints.map(wp => [wp.longitude, wp.latitude, 10000]);
+            concentrationAlongPath = waypoints.map(wp => wp.concentration || 0);
+            console.log('Trajectory created, length:', trajectory.length);
+            console.log('Concentration data length:', concentrationAlongPath.length);
+
+            renderCloudFromWaypoints(waypoints, currentCenterLon, currentCenterLat, raw.cloud_info);
+            renderOriginalRoute([startWp.longitude, startWp.latitude], [endWp.longitude, endWp.latitude]);
+            renderPlannedPath(trajectory);
+            createAircraft();
+            updateStats();
+            updateDataStatus('loaded', '已加载');
+
+            console.log('Scheduling zoom in 500ms...');
+            setTimeout(() => {
+                console.log('Executing zoom to:', currentCenterLon, currentCenterLat);
+                zoomToCloud();
+            }, 500);
+        } else if (raw.features || raw.planned_path) {
+            console.log('Processing alternative data format');
+            data = raw;
+            if (data.features && data.features.length > 0) {
+                renderScatterCloud(data.features, data.metadata);
+            }
+            if (data.original_route) {
+                renderOriginalRoute(data.original_route.start, data.original_route.end);
+            }
+            if (data.planned_path && data.planned_path.waypoints) {
+                const wps = data.planned_path.waypoints;
+                trajectory = wps.map(wp => [wp.longitude, wp.latitude, 10000]);
+                concentrationAlongPath = wps.map(wp => wp.concentration || 0);
+                renderPlannedPath(trajectory);
+                createAircraft();
+            }
+            if (data.metadata) {
+                currentCenterLon = data.metadata.center_lon || 120;
+                currentCenterLat = data.metadata.center_lat || 35;
+            }
+            updateStats();
+            updateDataStatus('loaded', '已加载');
+
+            setTimeout(() => {
+                console.log('Zooming to cloud at:', currentCenterLon, currentCenterLat);
+                zoomToCloud();
+            }, 500);
+        } else {
+            console.error('Unknown data format, available keys:', Object.keys(raw));
+            updateDataStatus('error', '格式错误');
+        }
+    }, 150);
+}
+
+function renderCloudFromWaypoints(waypoints, centerLon, centerLat, cloudInfo) {
+    console.log('Rendering cloud from waypoints, center:', centerLon, centerLat);
+
+    // 若 JSON 中包含精确计算的区域半径则使用之，否则使用合理的默认值
+    const zr = (cloudInfo && cloudInfo.zone_radii) ? cloudInfo.zone_radii : {};
+    const zoneRadii = { safe: zr.safe || 0.58, low: zr.low || 0.46, medium: zr.medium || 0.37, high: zr.high || 0.30 };
+    console.log('Zone radii (deg):', cloudZoneOrder.map(level => level + ':' + zoneRadii[level].toFixed(3)));
+    createDynamicCloudLayers(centerLon, centerLat, zoneRadii, 42, 0.6, 0.025, 0.00010, 72);
+
+    const centerEntity = viewer.entities.add({
+        name: 'Volcano Center',
+        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 10500),
+        point: { pixelSize: 15, color: Cesium.Color.BLACK, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '火山中心', font: '12px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -20) }
+    });
+    cloudEntities.push(centerEntity);
+}
+
+function renderScatterCloud(features, metadata) {
+    const centerLon = metadata ? metadata.center_lon : 120;
+    const centerLat = metadata ? metadata.center_lat : 35;
+
+    features.forEach(feature => {
+        const conc = feature.properties.concentration;
+        let color;
+        if (conc < 0.2) color = Cesium.Color.GREEN.withAlpha(0.5);
+        else if (conc < 0.5) color = Cesium.Color.YELLOW.withAlpha(0.6);
+        else if (conc < 0.8) color = Cesium.Color.ORANGE.withAlpha(0.7);
+        else color = Cesium.Color.RED.withAlpha(0.8);
+
+        const entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(
+                feature.geometry.coordinates[0],
+                feature.geometry.coordinates[1],
+                10000
+            ),
+            point: { pixelSize: 4 + conc * 6, color: color }
+        });
+        cloudEntities.push(entity);
+    });
+}
+
+function renderOriginalRoute(start, target) {
+    console.log('Rendering original route from', start, 'to', target);
+    originalRouteEntity = viewer.entities.add({
+        name: 'Original Route',
+        polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([start[0], start[1], 10000, target[0], target[1], 10000]),
+            width: 3,
+            material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.DODGERBLUE, dashLength: 16 }),
+            clampToGround: false
+        }
+    });
+
+    routeMarkerEntities.push(viewer.entities.add({
+        name: 'Start',
+        position: Cesium.Cartesian3.fromDegrees(start[0], start[1], 10000),
+        point: { pixelSize: 15, color: Cesium.Color.GREEN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '起点', font: 'bold 14px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -20) }
+    }));
+
+    routeMarkerEntities.push(viewer.entities.add({
+        name: 'Target',
+        position: Cesium.Cartesian3.fromDegrees(target[0], target[1], 10000),
+        point: { pixelSize: 18, color: Cesium.Color.RED, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '终点', font: 'bold 14px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -25) }
+    }));
+}
+
+function renderPlannedPath(trajectory) {
+    console.log('Rendering planned path, trajectory length:', trajectory ? trajectory.length : 0);
+    if (!trajectory || trajectory.length < 2) {
+        console.warn('Trajectory is empty or too short');
+        return;
+    }
+
+    plannedPathEntity = viewer.entities.add({
+        name: 'Planned Path',
+        polyline: {
+            positions: new Cesium.CallbackProperty(() => {
+                if (!trajectory || trajectory.length === 0) {
+                    return [];
+                }
+                const cappedIndex = Math.max(0, Math.min(Math.floor(currentIndex), trajectory.length - 1));
+                const positions = [];
+                for (let i = 0; i <= cappedIndex; i++) {
+                    positions.push(trajectory[i][0], trajectory[i][1], trajectory[i][2] || 10000);
+                }
+                if (positions.length === 3) {
+                    positions.push(trajectory[0][0], trajectory[0][1], trajectory[0][2] || 10000);
+                }
+                return Cesium.Cartesian3.fromDegreesArrayHeights(positions);
+            }, false),
+            width: 4,
+            material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.LIME, glowPower: 0.2 }),
+            clampToGround: false
+        }
+    });
+
+    for (let i = 0; i < trajectory.length; i += 10) {
+        const wp = viewer.entities.add({
+            name: `WP${i}`,
+            position: Cesium.Cartesian3.fromDegrees(trajectory[i][0], trajectory[i][1], trajectory[i][2] || 10000),
+            point: { pixelSize: 6, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.LIME, outlineWidth: 2 }
+        });
+        wp.pathStepIndex = i;
+        wp.show = false;
+        waypointEntities.push(wp);
+    }
+    updatePlannedPathProgress(0);
+}
+
+function updatePlannedPathProgress(index) {
+    const cappedIndex = Math.max(0, Math.min(Math.floor(index), trajectory.length - 1));
+    waypointEntities.forEach(entity => {
+        entity.show = plannedPathVisible && entity.pathStepIndex <= cappedIndex;
+    });
+}
+
+function createAircraft() {
+    console.log('Creating aircraft, trajectory length:', trajectory ? trajectory.length : 0);
+    if (aircraftEntity) {
+        console.log('Removing existing aircraft');
+        if (viewer.entities.contains(aircraftEntity)) {
+            viewer.entities.remove(aircraftEntity);
+        }
+    }
+    if (!trajectory || trajectory.length === 0) {
+        console.warn('Cannot create aircraft: no trajectory');
+        return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#00FFFF'; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(16, 2); ctx.lineTo(6, 28); ctx.lineTo(16, 22); ctx.lineTo(26, 28);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    aircraftEntity = viewer.entities.add({
+        name: 'Aircraft',
+        position: Cesium.Cartesian3.fromDegrees(trajectory[0][0], trajectory[0][1], trajectory[0][2] || 10000),
+        billboard: { image: canvas, scale: 1.0 },
+        point: { pixelSize: 12, color: Cesium.Color.CYAN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '✈ 飞机', font: '12px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -15) }
+    });
+}
+
+function playSimulation() {
+    if (!trajectory || trajectory.length === 0) return;
+    if (isPlaying) return;
+    isPlaying = true;
+    animate();
+}
+
+function pauseSimulation() {
+    isPlaying = false;
+    if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+}
+
+function resetSimulation() {
+    pauseSimulation();
+    currentIndex = 0;
+    updatePosition(0);
+    updateProgressUI(0);
+}
+
+function setSpeed(val) {
+    speed = parseFloat(val);
+    document.getElementById('speedValue').textContent = speed.toFixed(1);
+}
+
+function seekTo(val) {
+    if (!trajectory || trajectory.length === 0) return;
+    const progress = parseFloat(val) / 100;
+    currentIndex = Math.floor(progress * (trajectory.length - 1));
+    updatePosition(currentIndex);
+    updateProgressUI(progress * 100);
+}
+
+function animate() {
+    if (!isPlaying) return;
+    currentIndex += speed * 0.5;
+
+    if (currentIndex >= trajectory.length - 1) {
+        currentIndex = trajectory.length - 1;
+        isPlaying = false;
+        updatePosition(Math.floor(currentIndex));
+        updateProgressUI(100);
+        document.getElementById('flightProgress').textContent = '100.0%';
+        return;
+    }
+
+    updatePosition(Math.floor(currentIndex));
+
+    const progress = (currentIndex / (trajectory.length - 1)) * 100;
+    updateProgressUI(progress);
+
+    if (isPlaying) animationId = requestAnimationFrame(() => animate());
+}
+
+function updatePosition(index) {
+    if (!aircraftEntity || !trajectory) return;
+    index = Math.max(0, Math.min(index, trajectory.length - 1));
+    const pos = trajectory[index];
+    aircraftEntity.position = Cesium.Cartesian3.fromDegrees(pos[0], pos[1], pos[2] || 10000);
+    updatePlannedPathProgress(index);
+
+    let spd = 0;
+    if (index < trajectory.length - 1) {
+        const next = trajectory[index + 1];
+        const dx = (next[0] - pos[0]) * 111000 * Math.cos(pos[1] * Math.PI / 180);
+        const dy = (next[1] - pos[1]) * 111000;
+        spd = Math.sqrt(dx * dx + dy * dy) / 10;
+    }
+
+    let conc = '--';
+    if (concentrationAlongPath && index < concentrationAlongPath.length) {
+        const c = Number(concentrationAlongPath[index]);
+        if (Number.isFinite(c)) {
+            // 如果浓度非常小，使用科学计数法；否则使用4位小数
+            conc = (c < 0.0001 && c > 0) ? c.toExponential(2) : c.toFixed(4);
+        }
+    }
+
+    const prog = ((index / (trajectory.length - 1)) * 100).toFixed(1);
+
+    document.getElementById('positionInfo').textContent = `${pos[0].toFixed(4)}°, ${pos[1].toFixed(4)}°`;
+    document.getElementById('altitudeInfo').textContent = `${(pos[2] || 10000).toFixed(0)} m`;
+    document.getElementById('speedInfo').textContent = `${spd.toFixed(1)} m/s`;
+    document.getElementById('concentrationInfo').textContent = String(conc);
+    document.getElementById('flightProgress').textContent = `${prog}%`;
+}
+
+function updateProgressUI(percent) {
+    const p = Math.min(100, Math.max(0, percent)).toFixed(0);
+    document.getElementById('progressSlider').value = p;
+    document.getElementById('progressValue').textContent = `${p}%`;
+}
+
+function toggleCloud(show) {
+    cloudEntities.forEach(e => e.show = show);
+}
+
+function toggleOriginalRoute(show) {
+    if (originalRouteEntity) originalRouteEntity.show = show;
+    routeMarkerEntities.forEach(e => e.show = show);
+}
+
+function togglePlannedPath(show) {
+    plannedPathVisible = show;
+    if (plannedPathEntity) plannedPathEntity.show = show;
+    updatePlannedPathProgress(currentIndex);
+}
+
+function toggleAircraft(show) {
+    if (aircraftEntity) aircraftEntity.show = show;
+}
+
+function viewOverhead() {
+    if (!Number.isFinite(currentCenterLon) || !Number.isFinite(currentCenterLat)) {
+        console.error('Invalid center coordinates for overhead view');
+        return;
+    }
+
+    viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 500000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+        duration: 1.5
+    });
+}
+
+function viewFollow() {
+    if (aircraftEntity) viewer.trackedEntity = aircraftEntity;
+}
+
+function viewFree() {
+    viewer.trackedEntity = undefined;
+}
+
+function zoomToCloud() {
+    // 验证坐标是否有效
+    if (!Number.isFinite(currentCenterLon) || !Number.isFinite(currentCenterLat)) {
+        console.error('Invalid center coordinates:', currentCenterLon, currentCenterLat);
+        return;
+    }
+
+    console.log('Executing zoomToCloud with coordinates:', currentCenterLon, currentCenterLat);
+
+    try {
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 500000),
+            orientation: { heading: 0, pitch: Cesium.Math.toRadians(-60), roll: 0 },
+            duration: 2
+        });
+    } catch (error) {
+        console.error('Error in zoomToCloud:', error);
+    }
+}
+
+function clearAllData() {
+    console.log('=== Clearing all data ===');
+    pauseSimulation();
+
+    // 清除跟踪模式
+    if (viewer.trackedEntity) {
+        viewer.trackedEntity = undefined;
+        console.log('Cleared tracked entity');
+    }
+
+    // 清除所有实体
+    console.log('Clearing cloud entities:', cloudEntities.length);
+    cloudEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    cloudEntities = [];
+
+    if (originalRouteEntity) {
+        console.log('Clearing original route');
+        if (viewer.entities.contains(originalRouteEntity)) {
+            viewer.entities.remove(originalRouteEntity);
+        }
+        originalRouteEntity = null;
+    }
+
+    routeMarkerEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    routeMarkerEntities = [];
+
+    if (plannedPathEntity) {
+        console.log('Clearing planned path');
+        if (viewer.entities.contains(plannedPathEntity)) {
+            viewer.entities.remove(plannedPathEntity);
+        }
+        plannedPathEntity = null;
+    }
+
+    console.log('Clearing waypoint entities:', waypointEntities.length);
+    waypointEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    waypointEntities = [];
+
+    if (aircraftEntity) {
+        console.log('Clearing aircraft');
+        if (viewer.entities.contains(aircraftEntity)) {
+            viewer.entities.remove(aircraftEntity);
+        }
+        aircraftEntity = null;
+    }
+
+    // 重置数据
+    trajectory = [];
+    concentrationAlongPath = [];
+    currentIndex = 0;
+    plannedPathVisible = true;
+
+    // 重置坐标中心为默认值
+    currentCenterLon = 120;
+    currentCenterLat = 35;
+
+    // 重置动态云状态
+    cloudAnimStartTime = null;
+    cloudBaseCoords = {};
+    console.log('Reset center to default:', currentCenterLon, currentCenterLat);
+
+    // 重置UI
+    document.getElementById('positionInfo').textContent = '--';
+    document.getElementById('altitudeInfo').textContent = '--';
+    document.getElementById('speedInfo').textContent = '--';
+    document.getElementById('concentrationInfo').textContent = '--';
+    document.getElementById('flightProgress').textContent = '--';
+    document.getElementById('statDistance').textContent = '--';
+    document.getElementById('statMaxConc').textContent = '--';
+    document.getElementById('statDeviation').textContent = '--';
+    updateProgressUI(0);
+    updateDataStatus('', '未加载');
+
+    console.log('=== Clear complete, total entities:', viewer.entities.values.length);
+}
+
+function loadSampleData() {
+    console.log('Loading sample data...');
+    clearAllData();
+
+    setTimeout(() => {
+        // 云团中心：东海（日本九州岛西侧，模拟樱岛火山灰扩散场景）
+        currentCenterLon = 130.5;
+        currentCenterLat = 31.5;
+
+        console.log('Sample data center:', currentCenterLon, currentCenterLat);
+
+        // 不规则云形，4层危险区域，半径扩大以增强视觉效果
+        const zoneRadii = { safe: 3.8, low: 2.7, medium: 1.8, high: 0.9 };
+        createDynamicCloudLayers(currentCenterLon, currentCenterLat, zoneRadii, 42, 0.5, 0.04, 0.00012, 80);
+
+        // 火山中心标记（固定不动，只有灰云随风漂移）
+        cloudEntities.push(viewer.entities.add({
+            name: 'Volcano Center',
+            position: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 10650),
+            point: { pixelSize: 14, color: Cesium.Color.BLACK, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+            label: { text: '火山中心', font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+                     style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2,
+                     verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -22) }
+        }));
+
+        // ── 规划路径 ──
+        // 起点：台湾海峡北侧 → 终点：日本本州南岸
+        // 直飞路线会穿越火山灰核心区，规划路径绕北侧走，经过绿色安全区边缘
+        const startLon = 119.0, startLat = 26.5;
+        const endLon   = 140.5, endLat   = 34.0;
+        const cLon = currentCenterLon, cLat = currentCenterLat;
+
+        trajectory = [];
+        concentrationAlongPath = [];
+        const N = 150;
+
+        for (let i = 0; i <= N; i++) {
+            const t = i / N;
+
+            // 基准直线
+            const baseLon = startLon + (endLon - startLon) * t;
+            const baseLat = startLat + (endLat - startLat) * t;
+
+            // 规避鼓包：模拟"进入外层→察觉危险→急转北侧→绕行→恢复航线"全过程
+            // 双峰高斯：前峰较高（主动规避），后峰较宽（恢复过渡），路径经过外层绿色区
+            const bump1 = Math.exp(-Math.pow((t - 0.40) * 7.5, 2));
+            const bump2 = Math.exp(-Math.pow((t - 0.52) * 8.0, 2));
+            const avoidLat = 2.4 * bump1 + 1.6 * bump2;
+
+            // 东西向适度抖动：模拟飞行员多次调整航向，路径更真实
+            const jitterLon = 0.35 * Math.sin(t * Math.PI * 4.0) * Math.exp(-Math.pow((t - 0.45) * 3.5, 2));
+
+            const lon = baseLon + jitterLon;
+            const lat = baseLat + avoidLat;
+
+            // 浓度：基于到云中心的椭圆距离（风向拉伸）计算
+            const dLon = (lon - cLon) / 1.28;
+            const dLat = (lat - cLat) / 0.82;
+            const dist  = Math.sqrt(dLon * dLon + dLat * dLat);
+            // 高斯衰减：中心=1，green区边缘(dist≈3.8°)对应低浓度，路径最近处约0.08~0.13
+            const conc = Math.max(0, Math.exp(-Math.pow(dist / 1.85, 2)));
+
+            trajectory.push([lon, lat, 10000]);
+            concentrationAlongPath.push(conc.toFixed(4));
+        }
+
+        renderOriginalRoute([startLon, startLat], [endLon, endLat]);
+        renderPlannedPath(trajectory);
+        createAircraft();
+        updateStats();
+        updateDataStatus('loaded', '示例数据');
+
+        setTimeout(() => {
+            console.log('Zooming to sample cloud at:', currentCenterLon, currentCenterLat);
+            zoomToCloud();
+        }, 500);
+    }, 100);
+}
+
+function updateStats() {
+    if (!trajectory || trajectory.length < 2) return;
+    let dist = 0;
+    for (let i = 1; i < trajectory.length; i++) {
+        const p1 = trajectory[i - 1], p2 = trajectory[i];
+        const dx = (p2[0] - p1[0]) * 111 * Math.cos(p1[1] * Math.PI / 180);
+        const dy = (p2[1] - p1[1]) * 111;
+        dist += Math.sqrt(dx * dx + dy * dy);
+    }
+    const directDist = Math.sqrt(
+        Math.pow((trajectory[trajectory.length - 1][0] - trajectory[0][0]) * 111, 2) +
+        Math.pow((trajectory[trajectory.length - 1][1] - trajectory[0][1]) * 111, 2)
+    );
+
+    let maxConc = 0;
+    concentrationAlongPath.forEach(c => { const n = Number(c); if (Number.isFinite(n) && n > maxConc) maxConc = n; });
+
+    document.getElementById('statDistance').textContent = `${dist.toFixed(1)} km`;
+    // 如果浓度非常小，使用科学计数法
+    const maxConcText = maxConc > 0 ? ((maxConc < 0.0001) ? maxConc.toExponential(2) : maxConc.toFixed(4)) : '--';
+    document.getElementById('statMaxConc').textContent = maxConcText;
+    document.getElementById('statDeviation').textContent = `${(dist - directDist).toFixed(1)} km`;
+}
+
+function updateDataStatus(status, text) {
+    const el = document.getElementById('dataStatus');
+    el.textContent = text;
+    el.className = status;
+}
+
+async function loadValidationDefaults() {
+    try {
+        const response = await fetch('/api/output/current_config.json', { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const config = await response.json();
+        validationBaseConfig = config;
+
+        const centerLat = Number.isFinite(Number(config.geo_center_lat)) ? Number(config.geo_center_lat) : 35.0;
+        const centerLon = Number.isFinite(Number(config.geo_center_lon)) ? Number(config.geo_center_lon) : 120.0;
+        const spanLat = Number.isFinite(Number(config.geo_span_lat)) ? Number(config.geo_span_lat) : 2.0;
+        const spanLon = Number.isFinite(Number(config.geo_span_lon)) ? Number(config.geo_span_lon) : 2.0;
+
+        document.getElementById('validationSceneName').value = config.scene_name || 'image_validation_scene';
+        document.getElementById('validationCenterLat').value = centerLat.toFixed(4);
+        document.getElementById('validationCenterLon').value = centerLon.toFixed(4);
+        document.getElementById('validationSpanLat').value = spanLat.toFixed(2);
+        document.getElementById('validationSpanLon').value = spanLon.toFixed(2);
+        if (Number.isFinite(Number(config.concentration_threshold))) {
+            document.getElementById('validationFallbackLimit').value = Number(config.concentration_threshold).toFixed(2);
+        }
+        applySuggestedRoute();
+    } catch (error) {
+        validationBaseConfig = null;
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initCesium();
+    applySuggestedRoute();
+    loadValidationDefaults();
+});
+
+window.addEventListener('resize', () => {
+    if (viewer) viewer.resize();
+});
+</script>
+</body>
+</html>

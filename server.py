@@ -1,0 +1,509 @@
+from flask import Flask, send_from_directory, jsonify, request
+from flask_cors import CORS
+from datetime import datetime
+import os
+import json
+import numpy as np
+from urllib.parse import quote
+from werkzeug.utils import secure_filename
+
+# Get the absolute path of the server.py file location
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WEB_DIR = os.path.join(BASE_DIR, 'web')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
+
+app = Flask(__name__, static_folder=WEB_DIR)
+CORS(app)
+
+def _parse_request_payload():
+    if request.is_json:
+        return request.get_json(silent=True) or {}
+
+    payload = {}
+    for key, value in request.form.items():
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped[:1] in {'{', '['}:
+                try:
+                    payload[key] = json.loads(stripped)
+                    continue
+                except json.JSONDecodeError:
+                    pass
+        payload[key] = value
+    return payload
+
+def _parse_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    return default
+
+def _parse_float(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+def _parse_int(value, default):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+def _parse_geo_pair(payload, pair_key, lat_key, lon_key, default):
+    raw = payload.get(pair_key)
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = None
+
+    if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        lat = _parse_float(raw[0], default[0])
+        lon = _parse_float(raw[1], default[1])
+        return lat, lon
+
+    lat = _parse_float(payload.get(lat_key), default[0])
+    lon = _parse_float(payload.get(lon_key), default[1])
+    return lat, lon
+
+def _load_validation_config(payload):
+    from src.config.volcanic_ash_config import VolcanicAshConfig
+
+    config_payload = payload.get('config', {})
+    if isinstance(config_payload, str):
+        try:
+            config_payload = json.loads(config_payload)
+        except json.JSONDecodeError:
+            config_payload = {}
+
+    if isinstance(config_payload, dict) and config_payload:
+        return VolcanicAshConfig.from_dict(config_payload)
+
+    current_config_path = os.path.join(OUTPUT_DIR, 'current_config.json')
+    if os.path.exists(current_config_path):
+        return VolcanicAshConfig.load(current_config_path)
+
+    return VolcanicAshConfig()
+
+def _save_uploaded_image(uploaded_file, scene_name):
+    scene_slug = secure_filename(scene_name) or 'image_validation_scene'
+    filename = secure_filename(uploaded_file.filename or '')
+    _, ext = os.path.splitext(filename)
+    extension = ext.lower() or '.png'
+    upload_dir = os.path.join(OUTPUT_DIR, 'web_uploads', scene_slug)
+    os.makedirs(upload_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    file_path = os.path.join(upload_dir, f'{scene_slug}_{timestamp}{extension}')
+    uploaded_file.save(file_path)
+    return file_path
+
+def _resolve_validation_output_paths(payload, scene_name, web_request):
+    if not web_request:
+        animation_output_dir = payload.get('animation_output_dir') or 'output/validation_animation'
+        return {
+            'output_json': payload.get('output_json_path', 'output/validated_path.json'),
+            'output_plot': payload.get('output_plot_path', 'output/validated_path.png'),
+            'animation_output_dir': animation_output_dir,
+            'animation_gif_path': payload.get('animation_gif_path') or os.path.join(animation_output_dir, 'validated_path.gif'),
+            'animation_video_path': '',
+            'animation_manifest_dir': payload.get('animation_manifest_dir', 'output/validation_frames')
+        }
+
+    scene_slug = secure_filename(scene_name) or 'image_validation_scene'
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    root_dir = os.path.join(OUTPUT_DIR, 'web_validation', f'{scene_slug}_{timestamp}')
+    animation_output_dir = payload.get('animation_output_dir') or os.path.join(root_dir, 'animation')
+    return {
+        'output_json': payload.get('output_json_path') or os.path.join(root_dir, 'validated_path.json'),
+        'output_plot': payload.get('output_plot_path') or os.path.join(root_dir, 'validated_path.png'),
+        'animation_output_dir': animation_output_dir,
+        'animation_gif_path': payload.get('animation_gif_path') or os.path.join(animation_output_dir, 'validated_path.gif'),
+        'animation_video_path': '',
+        'animation_manifest_dir': payload.get('animation_manifest_dir') or os.path.join(root_dir, 'validation_frames')
+    }
+
+def _build_output_url(file_path):
+    if not file_path:
+        return None
+
+    absolute_path = file_path if os.path.isabs(file_path) else os.path.abspath(os.path.join(BASE_DIR, file_path))
+    output_root = os.path.abspath(OUTPUT_DIR)
+    if not absolute_path.startswith(output_root):
+        return None
+
+    relative_path = os.path.relpath(absolute_path, output_root).replace('\\', '/')
+    return f"/api/output/{quote(relative_path, safe='/')}"
+
+def _to_jsonable(value):
+    if isinstance(value, dict):
+        return {key: _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    return value
+
+def build_agent_for_config(config, model_path=None, allow_missing_model=False):
+    from src.rl_env.volcanic_ash_env import VolcanicAshEnv
+    from src.rl_training.ddpg_agent import DDPGAgent
+
+    env = VolcanicAshEnv(config)
+    state_dim = len(DDPGAgent.flatten_state(env.reset()[0]))
+    agent = DDPGAgent(state_dim=state_dim, action_dim=2)
+
+    if model_path:
+        if not os.path.exists(model_path):
+            if allow_missing_model:
+                return None
+            raise FileNotFoundError(f"模型文件不存在: {model_path}")
+        agent.load_model(model_path)
+
+    return agent
+
+@app.route('/')
+def serve_index():
+    return send_from_directory(WEB_DIR, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory(WEB_DIR, path)
+
+@app.route('/api/presets', methods=['GET'])
+def get_presets():
+    from src.config.volcanic_ash_config import get_preset_configs
+    
+    presets = get_preset_configs()
+    result = {}
+    for name, config in presets.items():
+        result[name] = config.to_dict()
+    
+    return jsonify({'success': True, 'presets': result})
+
+@app.route('/api/generate', methods=['POST'])
+def generate_images():
+    data = request.json
+    
+    from src.config.volcanic_ash_config import VolcanicAshConfig
+    from src.generation.image_generator import StaticImageGenerator, DynamicSimulation
+    from src.model.gmm_model import GMMVolcanicAshModel
+    
+    try:
+        config = VolcanicAshConfig.from_dict(data.get('config', {}))
+        
+        generator = StaticImageGenerator(config)
+        num_images = data.get('num_images', 5)
+        static_results = generator.generate_static_images(
+            output_dir='output/static',
+            num_images=num_images
+        )
+        
+        if data.get('generate_dynamic', False):
+            simulator = DynamicSimulation(GMMVolcanicAshModel(config))
+            dynamic_results = simulator.generate_dynamic_sequence(
+                num_frames=data.get('dynamic_frames', 20),
+                output_dir='output/dynamic'
+            )
+            
+            static_results['dynamic'] = dynamic_results
+        
+        config.save('output/current_config.json')
+        
+        return jsonify({
+            'success': True,
+            'results': static_results,
+            'message': f'成功生成 {len(static_results["generated_images"])} 张静态图像'
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/train', methods=['POST'])
+def train_model():
+    data = request.json
+    
+    from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs
+    from src.rl_training.trainer import Trainer
+    
+    try:
+        config = VolcanicAshConfig.from_dict(data.get('config', {}))
+        scene_names = data.get('training_scene_names') or config.training_scene_names
+        scene_configs = get_training_scene_configs(scene_names) if scene_names else get_training_scene_configs()
+        config.training_scene_names = [scene.scene_name for scene in scene_configs]
+        
+        trainer = Trainer(
+            config=config,
+            num_episodes=data.get('episodes', 300),
+            max_steps_per_episode=data.get('max_steps', 300),
+            learning_rate=data.get('learning_rate', 1e-4),
+            save_dir='models',
+            scene_configs=scene_configs
+        )
+        
+        agent, history = trainer.train(log_interval=50)
+        
+        model_info = {
+            'model_path': 'models/final_model.pth',
+            'training_curves': 'models/training_curves.png',
+            'total_episodes': trainer.num_episodes,
+            'final_reward': history['rewards'][-1] if history['rewards'] else 0,
+            'training_scene_names': config.training_scene_names
+        }
+        
+        return jsonify({
+            'success': True,
+            'model_info': model_info,
+            'message': '模型训练完成！'
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/plan', methods=['POST'])
+def plan_path():
+    data = request.json
+    
+    from src.config.volcanic_ash_config import VolcanicAshConfig
+    from src.path_planning.planner import PathPlanner
+    
+    try:
+        config = VolcanicAshConfig.from_dict(data.get('config', {}))
+        
+        agent = build_agent_for_config(
+            config,
+            model_path=data.get('model_path', 'models/final_model.pth'),
+            allow_missing_model=True
+        )
+        
+        planner = PathPlanner(config, agent)
+         
+        start_geo = tuple(data.get('start_position', [34.5, 119.5]))
+        target_geo = tuple(data.get('target_position', [35.5, 120.5]))
+         
+        path_result = planner.plan_path_geo_with_fallback(
+            start_geo,
+            target_geo,
+            max_steps=data.get('max_steps', 500),
+            max_concentration=data.get('fallback_concentration_limit')
+        )
+        
+        output_file = 'output/planned_path.json'
+        planner.export_path_json(path_result, output_file)
+        
+        return jsonify({
+            'success': True,
+            'path_data': path_result,
+            'output_file': output_file,
+            'message': '路径规划完成！'
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/multi-plan', methods=['POST'])
+def multi_constraint_plan():
+    data = request.json
+    
+    from src.config.volcanic_ash_config import VolcanicAshConfig
+    from src.path_planning.multi_constraint import MultiConstraintPlanner
+    
+    try:
+        config = VolcanicAshConfig.from_dict(data.get('config', {}))
+        
+        agent = build_agent_for_config(config, model_path=data.get('model_path', 'models/final_model.pth'))
+        
+        multi_planner = MultiConstraintPlanner(config, agent)
+        
+        solutions = multi_planner.generate_multiple_solutions(
+            start_geo=tuple(data.get('start_position', [34.8, 119.8])),
+            target_geo=tuple(data.get('target_position', [35.2, 120.2])),
+            risk_tolerance_levels=data.get('risk_levels', ['low', 'medium', 'high']),
+            fuel_constraints=data.get('fuel_limits', [80.0, 120.0]),
+            max_steps=data.get('max_steps', 350)
+        )
+        
+        output_file = 'output/multi_constraint_solutions.json'
+        multi_planner.export_solutions_json(solutions, output_file)
+        
+        report = multi_planner.generate_comparison_report(solutions)
+        
+        return jsonify({
+            'success': True,
+            'solutions_count': len(solutions.get('solutions', [])),
+            'solutions': solutions,
+            'report': report,
+            'output_file': output_file
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/validate-image', methods=['POST'])
+def validate_image():
+    data = _parse_request_payload()
+     
+    from src.path_planning.validation_pipeline import ValidationPipeline
+     
+    try:
+        config = _load_validation_config(data)
+        pipeline = ValidationPipeline(
+            config=config,
+            model_path=data.get('model_path', 'models/final_model.pth')
+        )
+         
+        scene_name = str(data.get('scene_name') or 'image_validation_scene')
+        uploaded_file = request.files.get('image_file')
+        image_path = data.get('image_path')
+        if uploaded_file and uploaded_file.filename:
+            image_path = _save_uploaded_image(uploaded_file, scene_name)
+        if not image_path:
+            raise ValueError('image_path or image_file is required')
+
+        web_request = _parse_bool(data.get('web_request'), default=uploaded_file is not None)
+        output_paths = _resolve_validation_output_paths(data, scene_name, web_request)
+        default_start = (
+            config.geo_center_lat - config.geo_span_lat * 0.35,
+            config.geo_center_lon - config.geo_span_lon * 0.35
+        )
+        default_target = (
+            config.geo_center_lat + config.geo_span_lat * 0.35,
+            config.geo_center_lon + config.geo_span_lon * 0.35
+        )
+         
+        result = pipeline.validate_image(
+            image_source=image_path,
+            start_geo=_parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start),
+            target_geo=_parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target),
+            output_json_path=output_paths['output_json'],
+            output_plot_path=output_paths['output_plot'],
+            scene_name=scene_name,
+            fallback_concentration_limit=_parse_float(data.get('fallback_concentration_limit')),
+            animation_output_dir=output_paths['animation_output_dir'],
+            animation_gif_path=output_paths['animation_gif_path'],
+            animation_video_path=output_paths['animation_video_path'],
+            animation_fps=_parse_int(data.get('animation_fps', 12), 12),
+            animation_save_frames=_parse_bool(data.get('animation_save_frames', False), False),
+            animation_max_frames=_parse_int(data.get('animation_max_frames', 180), 180)
+        )
+         
+        manifest = pipeline.build_animation_export_manifest(
+            result,
+            output_dir=output_paths['animation_manifest_dir']
+        )
+        animation_export = result.get('validation_info', {}).get('animation_export') or {}
+        animation_gif_path = animation_export.get('gif_path') or output_paths['animation_gif_path']
+        if isinstance(animation_export, dict):
+            animation_export.pop('video_path', None)
+            animation_export.pop('video_codec', None)
+ 
+        response_payload = _to_jsonable({
+            'success': True,
+            'path_data': result,
+            'output_file': output_paths['output_json'],
+            'output_file_url': _build_output_url(output_paths['output_json']),
+            'plot_file': output_paths['output_plot'],
+            'plot_file_url': _build_output_url(output_paths['output_plot']),
+            'animation_manifest': manifest,
+            'animation_export': animation_export,
+            'animation_gif_path': animation_gif_path,
+            'animation_gif_url': _build_output_url(animation_gif_path),
+            'source_image_path': image_path,
+            'source_image_url': _build_output_url(image_path),
+            'message': '图像验证路径生成完成！'
+        })
+
+        return jsonify(response_payload)
+     
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/output/<path:relative_path>', methods=['GET'])
+def serve_output_file(relative_path):
+    output_root = os.path.abspath(OUTPUT_DIR)
+    safe_path = os.path.abspath(os.path.join(OUTPUT_DIR, relative_path))
+
+    if not safe_path.startswith(output_root):
+        return jsonify({'error': 'Invalid path'}), 400
+
+    if not os.path.exists(safe_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    relative_clean = os.path.relpath(safe_path, OUTPUT_DIR).replace('\\', '/')
+    return send_from_directory(OUTPUT_DIR, relative_clean)
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze_data():
+    data = request.json
+    
+    from src.analysis.data_analyzer import DataAnalyzer
+    
+    try:
+        analyzer = DataAnalyzer()
+        
+        flight_data = data.get('flight_data', {})
+        if flight_data:
+            analysis = analyzer.analyze_flight_data(flight_data)
+        else:
+            analysis = {'error': 'No flight data provided'}
+        
+        report = analyzer.generate_comprehensive_report([{'data': flight_data}])
+        
+        text_report = analyzer.format_text_report(report)
+        
+        analyzer.export_report_json(report, 'output/analysis_report.json')
+        
+        with open('output/analysis_report.txt', 'w', encoding='utf-8') as f:
+            f.write(text_report)
+        
+        return jsonify({
+            'success': True,
+            'analysis': analysis,
+            'report': report,
+            'text_report': text_report
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/data/<filename>', methods=['GET'])
+def serve_data_file(filename):
+    directory = request.args.get('dir', 'output')
+    safe_path = os.path.normpath(os.path.join(directory, filename))
+    
+    if not safe_path.startswith(directory):
+        return jsonify({'error': 'Invalid path'}), 400
+    
+    if os.path.exists(safe_path):
+        with open(safe_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data)
+    else:
+        return jsonify({'error': 'File not found'}), 404
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("Volcanic Ash Avoidance System - Web Server Starting")
+    print("=" * 60)
+    print("Access URL: http://localhost:5000")
+    print("API Endpoints:")
+    print("  GET  /api/presets      - Get preset configs")
+    print("  POST /api/generate     - Generate images")
+    print("  POST /api/train        - Train model")
+    print("  POST /api/plan         - Plan path")
+    print("  POST /api/multi-plan   - Multi-constraint planning")
+    print("  POST /api/validate-image - Validate an image-derived ash scene")
+    print("  POST /api/analyze      - Data analysis")
+    print("=" * 60)
+    
+    app.run(debug=True, use_reloader=False, port=5000, host='0.0.0.0')

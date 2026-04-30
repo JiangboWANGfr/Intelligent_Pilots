@@ -1,0 +1,14 @@
+完整流程:
+#步骤1:GuI配置(选火山、调参数)
+python config_gui.py
+#一点击
+应用并关闭"保存到 output/current_config.json
+#步骤2:训练模型(自动读取 GUI 配置)
+python train_model.py
+#-训练 300 轮，保存到 models/final_model.pth
+#步骤3:规划航线(自动读取同一配置)
+python test_planning.py
+# - 生成 output/planned_path.json
+#步骤4:Web可视化
+python server.py
+#浏览器打开 http://localhost:5000
