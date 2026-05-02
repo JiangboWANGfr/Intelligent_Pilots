@@ -167,7 +167,10 @@ class PathPlanner:
         
         self.env.aircraft_pos = np.array(start_pos, dtype=np.float32)
         self.env.target_pos = np.array(target_pos, dtype=np.float32)
-        self.env.velocity = np.array([0.0, 0.0], dtype=np.float32)
+        delta = self.env.target_pos - self.env.aircraft_pos
+        self.env.heading = float(np.arctan2(-float(delta[0]), float(delta[1])))
+        self.env.speed = self.env.cruise_speed
+        self.env.prev_action = np.zeros(2, dtype=np.float32)
         self.env.step_count = 0
         self.env.trajectory = [self.env.aircraft_pos.copy()]
         self.env.total_fuel_consumption = 0.0
@@ -191,6 +194,7 @@ class PathPlanner:
         }
         
         for step in range(max_steps):
+            previous_pos = self.env.aircraft_pos.copy()
             action = self.agent.select_action(state, evaluate=True)
             
             next_state, reward, terminated, truncated, info = self.env.step(action)
@@ -201,6 +205,8 @@ class PathPlanner:
                                                   info['current_concentration'])
             
             current_pos = self.env.aircraft_pos.copy()
+            velocity_y = float(current_pos[0] - previous_pos[0])
+            velocity_x = float(current_pos[1] - previous_pos[1])
             lat, lon = self.ash_model.pixel_to_geo(int(current_pos[1]),
                                                    int(current_pos[0]))
             
@@ -210,9 +216,11 @@ class PathPlanner:
                 'pixel_y': float(current_pos[0]),
                 'latitude': lat,
                 'longitude': lon,
-                'velocity_x': float(self.env.velocity[0]),
-                'velocity_y': float(self.env.velocity[1]),
+                'velocity_x': velocity_x,
+                'velocity_y': velocity_y,
                 'concentration': float(info['current_concentration']),
+                'speed': float(info.get('speed', self.env.speed)),
+                'heading': float(info.get('heading', self.env.heading)),
                 'cumulative_reward': path_data['total_reward'],
                 'cumulative_fuel': path_data['total_fuel']
             }

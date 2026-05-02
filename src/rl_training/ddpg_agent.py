@@ -151,11 +151,12 @@ class DDPGAgent:
     def flatten_state(state_dict: Dict) -> np.ndarray:
         state_list = []
         state_list.extend(state_dict['aircraft_pos'])
-        state_list.extend(state_dict['target_pos'])
         state_list.extend(state_dict['goal_vector'])
-        state_list.extend(state_dict['local_concentration'])
-        state_list.extend(state_dict['velocity'])
+        state_list.extend(state_dict['heading_vec'])
+        state_list.extend(state_dict['speed'])
         state_list.extend(state_dict['distance_to_target'])
+        state_list.extend(state_dict['current_concentration'])
+        state_list.extend(state_dict['forward_concentration'])
         return np.array(state_list, dtype=np.float32)
     
     def train_step(self):
