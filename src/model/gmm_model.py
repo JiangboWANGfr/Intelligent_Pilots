@@ -9,10 +9,32 @@ class GMMVolcanicAshModel:
     def __init__(self, config: VolcanicAshConfig):
         self.config = config
         self.height, self.width = config.image_size
+        self.centers = self._prepare_centers(config.centers)
         self.irregular_generator = None
         if config.enable_irregular:
             self.irregular_generator = IrregularAshGenerator(seed=config.random_seed)
-        
+
+    def _prepare_centers(self, centers: List[Dict]) -> List[Dict]:
+        seed = self.config.random_seed if self.config.random_seed is not None else 0
+        rng = np.random.default_rng(seed)
+        prepared_centers = []
+
+        for center in centers:
+            prepared = dict(center)
+            if prepared.get('theta') is None:
+                theta_degrees = prepared.get('theta_degrees', prepared.get('theta_deg'))
+                if theta_degrees is not None:
+                    prepared['theta'] = float(np.deg2rad(float(theta_degrees)))
+                else:
+                    prepared['theta'] = float(rng.uniform(0.0, np.pi))
+            else:
+                prepared['theta'] = float(prepared['theta'])
+
+            prepared['theta'] = float(prepared['theta'] % np.pi)
+            prepared_centers.append(prepared)
+
+        return prepared_centers
+
     def _generate_single_gaussian(self, center: Dict) -> np.ndarray:
         x = np.arange(self.width)
         y = np.arange(self.height)
@@ -20,8 +42,19 @@ class GMMVolcanicAshModel:
         
         cx, cy = center['x'], center['y']
         std_x, std_y = center['std_x'], center['std_y']
-        
-        gaussian = np.exp(-((X - cx)**2 / (2 * std_x**2) + (Y - cy)**2 / (2 * std_y**2)))
+        theta = center['theta']
+        cos_t = np.cos(theta)
+        sin_t = np.sin(theta)
+
+        dx = X - cx
+        dy = Y - cy
+        x_rot = cos_t * dx + sin_t * dy
+        y_rot = -sin_t * dx + cos_t * dy
+
+        gaussian = np.exp(-0.5 * (
+            (x_rot ** 2) / (std_x ** 2) +
+            (y_rot ** 2) / (std_y ** 2)
+        ))
         return gaussian * center['weight']
     
     def generate_concentration_map(self, irregular: Optional[bool] = None) -> np.ndarray:
@@ -37,12 +70,12 @@ class GMMVolcanicAshModel:
         # 生成基础高斯混合浓度图
         concentration_map = np.zeros((self.height, self.width), dtype=np.float64)
 
-        for center in self.config.centers:
+        for center in self.centers:
             gaussian = self._generate_single_gaussian(center)
             concentration_map += gaussian
 
-        if len(self.config.centers) > 0:
-            total_weight = sum(c['weight'] for c in self.config.centers)
+        if len(self.centers) > 0:
+            total_weight = sum(c['weight'] for c in self.centers)
             if total_weight > 0:
                 concentration_map /= total_weight
 

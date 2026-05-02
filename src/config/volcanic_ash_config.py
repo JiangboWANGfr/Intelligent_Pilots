@@ -19,6 +19,7 @@ class GMMCenter:
     weight: float
     std_x: float
     std_y: float
+    theta: Optional[float] = None
 
 
 @dataclass
