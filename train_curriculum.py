@@ -72,6 +72,11 @@ def train_stage(stage: Dict,
                 buffer_size: int,
                 noise_decay: float,
                 min_noise: float,
+                algorithm: str,
+                policy_noise: float,
+                noise_clip: float,
+                policy_delay: int,
+                update_every: int,
                 load_model: Optional[str] = None,
                 episodes_override: Optional[int] = None) -> str:
     base_config = load_base_config(config_path)
@@ -88,6 +93,7 @@ def train_stage(stage: Dict,
 
     print('=' * 80)
     print(f"Training stage: {stage['name']}")
+    print(f"Algorithm: {algorithm.upper()}")
     print(f"Episodes: {episodes}")
     print(f"Scenes: {', '.join(stage['scenes'])}")
     print(f"Save dir: {save_dir}")
@@ -102,6 +108,10 @@ def train_stage(stage: Dict,
         batch_size=batch_size,
         noise_decay=noise_decay,
         min_noise=min_noise,
+        algorithm=algorithm,
+        policy_noise=policy_noise,
+        noise_clip=noise_clip,
+        policy_delay=policy_delay,
         save_dir=save_dir,
         scene_configs=scene_configs
     )
@@ -110,7 +120,7 @@ def train_stage(stage: Dict,
         trainer.agent.load_model(load_model)
         print(f'Loaded previous model: {load_model}')
 
-    trainer.train(log_interval=50)
+    trainer.train(update_every=update_every, log_interval=50)
     return os.path.join(save_dir, 'final_model.pth')
 
 
@@ -127,11 +137,16 @@ def main():
     parser.add_argument('--episodes', type=int, default=None,
                         help='Override episodes for every selected stage.')
     parser.add_argument('--max-steps', type=int, default=400)
+    parser.add_argument('--algorithm', choices=['td3', 'ddpg'], default='td3')
     parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--buffer-size', type=int, default=300000)
     parser.add_argument('--noise-decay', type=float, default=0.999)
     parser.add_argument('--min-noise', type=float, default=0.05)
+    parser.add_argument('--policy-noise', type=float, default=0.2)
+    parser.add_argument('--noise-clip', type=float, default=0.5)
+    parser.add_argument('--policy-delay', type=int, default=2)
+    parser.add_argument('--update-every', type=int, default=10)
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to load before the first selected stage.')
     args = parser.parse_args()
@@ -157,6 +172,11 @@ def main():
             buffer_size=args.buffer_size,
             noise_decay=args.noise_decay,
             min_noise=args.min_noise,
+            algorithm=args.algorithm,
+            policy_noise=args.policy_noise,
+            noise_clip=args.noise_clip,
+            policy_delay=args.policy_delay,
+            update_every=args.update_every,
             load_model=previous_model,
             episodes_override=args.episodes
         )

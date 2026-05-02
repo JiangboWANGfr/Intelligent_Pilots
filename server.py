@@ -157,11 +157,14 @@ def _to_jsonable(value):
 
 def build_agent_for_config(config, model_path=None, allow_missing_model=False):
     from src.rl_env.volcanic_ash_env import VolcanicAshEnv
-    from src.rl_training.ddpg_agent import DDPGAgent
+    from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 
     env = VolcanicAshEnv(config)
     state_dim = len(DDPGAgent.flatten_state(env.reset()[0]))
-    agent = DDPGAgent(state_dim=state_dim, action_dim=2)
+    algorithm = 'td3'
+    if model_path and os.path.exists(model_path):
+        algorithm = infer_checkpoint_algorithm(model_path)
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
 
     if model_path:
         if not os.path.exists(model_path):
@@ -239,7 +242,7 @@ def train_model():
     try:
         config = VolcanicAshConfig.from_dict(data.get('config', {}))
         scene_names = data.get('training_scene_names') or config.training_scene_names
-        scene_configs = get_training_scene_configs(scene_names) if scene_names else get_training_scene_configs()
+        scene_configs = get_training_scene_configs(scene_names) if scene_names else [VolcanicAshConfig.from_dict(config.to_dict())]
         config.training_scene_names = [scene.scene_name for scene in scene_configs]
         
         trainer = Trainer(
@@ -247,16 +250,27 @@ def train_model():
             num_episodes=data.get('episodes', 300),
             max_steps_per_episode=data.get('max_steps', 300),
             learning_rate=data.get('learning_rate', 1e-4),
+            buffer_size=data.get('buffer_size', 300000),
+            batch_size=data.get('batch_size', 128),
+            noise_decay=data.get('noise_decay', 0.999),
+            algorithm=data.get('algorithm', 'td3'),
+            policy_noise=data.get('policy_noise', 0.2),
+            noise_clip=data.get('noise_clip', 0.5),
+            policy_delay=data.get('policy_delay', 2),
             save_dir='models',
             scene_configs=scene_configs
         )
         
-        agent, history = trainer.train(log_interval=50)
+        agent, history = trainer.train(
+            update_every=data.get('update_every', 10),
+            log_interval=50
+        )
         
         model_info = {
             'model_path': 'models/final_model.pth',
             'training_curves': 'models/training_curves.png',
             'total_episodes': trainer.num_episodes,
+            'algorithm': trainer.algorithm,
             'final_reward': history['rewards'][-1] if history['rewards'] else 0,
             'training_scene_names': config.training_scene_names
         }

@@ -9,7 +9,7 @@ from datetime import datetime
 from collections import deque
 
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
-from src.rl_training.ddpg_agent import DDPGAgent
+from src.rl_training.ddpg_agent import DDPGAgent, create_agent
 from src.config.volcanic_ash_config import VolcanicAshConfig
 
 
@@ -25,6 +25,10 @@ class Trainer:
                  noise_decay: float = 0.995,
                  min_noise: float = 0.05,
                  save_dir: str = 'models',
+                 algorithm: str = 'td3',
+                 policy_noise: float = 0.2,
+                 noise_clip: float = 0.5,
+                 policy_delay: int = 2,
                  scene_configs: Optional[List[VolcanicAshConfig]] = None):
         
         self.config = config
@@ -34,6 +38,7 @@ class Trainer:
         self.save_dir = save_dir
         self.noise_decay = noise_decay
         self.min_noise = min_noise
+        self.algorithm = algorithm.lower()
         
         os.makedirs(save_dir, exist_ok=True)
         
@@ -43,14 +48,18 @@ class Trainer:
         state_dim = self._calculate_state_dim()
         action_dim = 2
         
-        self.agent = DDPGAgent(
+        self.agent = create_agent(
+            self.algorithm,
             state_dim=state_dim,
             action_dim=action_dim,
             learning_rate=learning_rate,
             gamma=gamma,
             tau=tau,
             buffer_size=buffer_size,
-            batch_size=batch_size
+            batch_size=batch_size,
+            policy_noise=policy_noise,
+            noise_clip=noise_clip,
+            policy_delay=policy_delay
         )
         
         self.noise_scale = 0.3
@@ -72,6 +81,7 @@ class Trainer:
             'final_distances': [],
             'termination_reasons': [],
             'scene_names': [],
+            'algorithm': self.algorithm,
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
     
@@ -94,6 +104,7 @@ class Trainer:
             episode_actor_loss_sum = 0
             episode_critic_loss_sum = 0
             loss_count = 0
+            actor_loss_count = 0
             concentrations = [float(reset_info.get('current_concentration', 0.0))]
             danger_violation = bool(reset_info.get('is_in_danger_zone', False))
             success = False
@@ -118,14 +129,19 @@ class Trainer:
                 self.agent.replay_buffer.push(flat_state, action, reward,
                                               flat_next_state, done)
                 
-                loss = self.agent.train_step()
+                loss = (None, None)
+                if step % update_every == 0:
+                    loss = self.agent.train_step()
                 if loss is not None and len(loss) == 2:
                     actor_loss, critic_loss = loss
-                    if actor_loss is not None and critic_loss is not None:
-                        episode_loss_sum += (actor_loss + critic_loss)
-                        episode_actor_loss_sum += actor_loss
+                    if critic_loss is not None:
+                        episode_loss_sum += critic_loss
                         episode_critic_loss_sum += critic_loss
                         loss_count += 1
+                    if actor_loss is not None:
+                        episode_loss_sum += actor_loss
+                        episode_actor_loss_sum += actor_loss
+                        actor_loss_count += 1
                 
                 episode_reward += reward
                 state = next_state
@@ -154,7 +170,7 @@ class Trainer:
             self.training_history['episodes'].append(episode)
             self.training_history['rewards'].append(episode_reward)
             self.training_history['losses'].append(episode_loss_sum / max(loss_count, 1))
-            self.training_history['actor_losses'].append(episode_actor_loss_sum / max(loss_count, 1))
+            self.training_history['actor_losses'].append(episode_actor_loss_sum / max(actor_loss_count, 1))
             self.training_history['critic_losses'].append(episode_critic_loss_sum / max(loss_count, 1))
             self.training_history['steps'].append(step + 1)
             self.training_history['success_rates'].append(success_rate)

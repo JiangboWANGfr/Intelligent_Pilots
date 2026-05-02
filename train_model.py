@@ -46,7 +46,7 @@ def build_scene_configs(config: VolcanicAshConfig,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train the volcanic ash avoidance DDPG model.')
+    parser = argparse.ArgumentParser(description='Train the volcanic ash avoidance RL model.')
     parser.add_argument('--config', default='output/current_config.json',
                         help='Path to config JSON.')
     parser.add_argument('--fallback-preset', default='双中心_复杂扩散',
@@ -57,11 +57,20 @@ def main():
                         help='Train on all preset scenes when no explicit scenes are provided.')
     parser.add_argument('--episodes', type=int, default=3000)
     parser.add_argument('--max-steps', type=int, default=400)
+    parser.add_argument('--algorithm', choices=['td3', 'ddpg'], default='td3')
     parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--buffer-size', type=int, default=300000)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--noise-decay', type=float, default=0.999)
     parser.add_argument('--min-noise', type=float, default=0.05)
+    parser.add_argument('--policy-noise', type=float, default=0.2,
+                        help='TD3 target policy smoothing noise.')
+    parser.add_argument('--noise-clip', type=float, default=0.5,
+                        help='TD3 target policy smoothing noise clip.')
+    parser.add_argument('--policy-delay', type=int, default=2,
+                        help='TD3 delayed actor update interval.')
+    parser.add_argument('--update-every', type=int, default=10,
+                        help='Run one gradient update every N environment steps.')
     parser.add_argument('--save-dir', default='models')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
@@ -73,12 +82,13 @@ def main():
     print('=' * 70)
     print()
     print('Configuration:')
-    print('  - Algorithm: DDPG (Deep Deterministic Policy Gradient)')
+    print(f'  - Algorithm: {args.algorithm.upper()}')
     print(f'  - Episodes: {args.episodes}')
     print(f'  - Max steps per episode: {args.max_steps}')
     print(f'  - Learning rate: {args.learning_rate}')
     print(f'  - Batch size: {args.batch_size}')
     print(f'  - Buffer size: {args.buffer_size}')
+    print(f'  - Update every: {args.update_every} steps')
     print('  - Environment: VolcanicAshEnv (Gymnasium)')
     print()
 
@@ -109,6 +119,10 @@ def main():
         batch_size=args.batch_size,
         noise_decay=args.noise_decay,
         min_noise=args.min_noise,
+        algorithm=args.algorithm,
+        policy_noise=args.policy_noise,
+        noise_clip=args.noise_clip,
+        policy_delay=args.policy_delay,
         save_dir=args.save_dir,
         scene_configs=scene_configs
     )
@@ -120,7 +134,8 @@ def main():
     print('Starting training...')
     print('-' * 70)
 
-    agent, history = trainer.train(log_interval=args.log_interval)
+    agent, history = trainer.train(update_every=args.update_every,
+                                   log_interval=args.log_interval)
 
     print()
     print('=' * 70)

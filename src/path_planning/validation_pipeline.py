@@ -9,7 +9,7 @@ from src.path_planning.animation_exporter import ValidationAnimationExporter
 from src.path_planning.fallback_planner import FallbackPlanner
 from src.path_planning.planner import PathPlanner
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
-from src.rl_training.ddpg_agent import DDPGAgent
+from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 
 
 class ValidationPipeline:
@@ -33,7 +33,8 @@ class ValidationPipeline:
 
         temp_env = VolcanicAshEnv(self.base_config)
         state_dim = len(DDPGAgent.flatten_state(temp_env.reset()[0]))
-        agent = DDPGAgent(state_dim=state_dim, action_dim=2)
+        algorithm = infer_checkpoint_algorithm(self.model_path)
+        agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
         agent.load_model(self.model_path)
         self.agent = agent
         return self.agent

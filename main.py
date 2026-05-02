@@ -11,7 +11,7 @@ from src.model.gmm_model import GMMVolcanicAshModel
 from src.generation.image_generator import StaticImageGenerator, DynamicSimulation
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.trainer import Trainer
-from src.rl_training.ddpg_agent import DDPGAgent
+from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 from src.path_planning.planner import PathPlanner
 from src.path_planning.multi_constraint import MultiConstraintPlanner
 from src.path_planning.validation_pipeline import ValidationPipeline
@@ -23,7 +23,8 @@ def build_agent_for_config(config: VolcanicAshConfig,
                            allow_missing_model: bool = False):
     env = VolcanicAshEnv(config)
     state_dim = len(DDPGAgent.flatten_state(env.reset()[0]))
-    agent = DDPGAgent(state_dim=state_dim, action_dim=2)
+    algorithm = infer_checkpoint_algorithm(model_path) if os.path.exists(model_path) else 'td3'
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
     if not os.path.exists(model_path):
         if allow_missing_model:
             return None

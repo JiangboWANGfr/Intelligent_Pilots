@@ -13,7 +13,7 @@ print()
 
 from src.config.volcanic_ash_config import VolcanicAshConfig, get_preset_configs
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
-from src.rl_training.ddpg_agent import DDPGAgent
+from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 from src.path_planning.planner import PathPlanner
 
 # ── 步骤1：加载配置 ──────────────────────────────────────────────────────────
@@ -48,7 +48,9 @@ model_path = 'models/final_model.pth'
 if os.path.exists(model_path):
     try:
         temp_env = VolcanicAshEnv(config)
-        agent = DDPGAgent(state_dim=len(DDPGAgent.flatten_state(temp_env.reset()[0])), action_dim=2)
+        state_dim = len(DDPGAgent.flatten_state(temp_env.reset()[0]))
+        algorithm = infer_checkpoint_algorithm(model_path)
+        agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
         agent.load_model(model_path)
         print('      [OK] Model loaded:', model_path)
 

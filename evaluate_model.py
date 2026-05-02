@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
-from src.rl_training.ddpg_agent import DDPGAgent
+from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 
 
 def parse_scene_names(raw: Optional[str]) -> Optional[List[str]]:
@@ -26,8 +26,14 @@ def build_scene_configs(config: VolcanicAshConfig,
     return [VolcanicAshConfig.from_dict(config.to_dict())]
 
 
+def infer_algorithm(model_path: str, requested: str) -> str:
+    if requested != 'auto':
+        return requested
+    return infer_checkpoint_algorithm(model_path)
+
+
 def evaluate_episode(env: VolcanicAshEnv,
-                     agent: DDPGAgent,
+                     agent,
                      seed: int,
                      max_steps: int) -> Dict:
     state, info = env.reset(seed=seed)
@@ -105,7 +111,9 @@ def summarize(results: List[Dict]) -> Dict:
 def main():
     parser = argparse.ArgumentParser(description='Evaluate a trained volcanic ash avoidance model.')
     parser.add_argument('--model', default='models/final_model.pth',
-                        help='Path to a trained DDPG checkpoint.')
+                        help='Path to a trained RL checkpoint.')
+    parser.add_argument('--algorithm', choices=['auto', 'td3', 'ddpg'], default='auto',
+                        help='Model algorithm. auto inspects the checkpoint.')
     parser.add_argument('--config', default='output/current_config.json',
                         help='Path to the volcanic ash config JSON.')
     parser.add_argument('--episodes', type=int, default=100,
@@ -134,7 +142,8 @@ def main():
     state_dim = len(DDPGAgent.flatten_state(obs))
     env.scene_cursor = -1
 
-    agent = DDPGAgent(state_dim=state_dim, action_dim=2)
+    algorithm = infer_algorithm(args.model, args.algorithm)
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
     agent.load_model(args.model)
 
     results = [
@@ -145,6 +154,7 @@ def main():
 
     output = {
         'model_path': args.model,
+        'algorithm': algorithm,
         'config_path': args.config,
         'scene_names': [scene.scene_name or scene.model_type for scene in scene_configs],
         'seed': args.seed,
