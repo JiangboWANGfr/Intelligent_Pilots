@@ -114,6 +114,8 @@ def main():
                         help='Path to a trained RL checkpoint.')
     parser.add_argument('--algorithm', choices=['auto', 'td3', 'ddpg'], default='auto',
                         help='Model algorithm. auto inspects the checkpoint.')
+    parser.add_argument('--device', choices=['auto', 'cuda', 'cpu', 'mps'], default='auto',
+                        help='Torch device for model inference.')
     parser.add_argument('--config', default='output/current_config.json',
                         help='Path to the volcanic ash config JSON.')
     parser.add_argument('--episodes', type=int, default=100,
@@ -143,7 +145,7 @@ def main():
     env.scene_cursor = -1
 
     algorithm = infer_algorithm(args.model, args.algorithm)
-    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2, device=args.device)
     agent.load_model(args.model)
 
     results = [
@@ -155,6 +157,7 @@ def main():
     output = {
         'model_path': args.model,
         'algorithm': algorithm,
+        'device': str(agent.device),
         'config_path': args.config,
         'scene_names': [scene.scene_name or scene.model_type for scene in scene_configs],
         'seed': args.seed,

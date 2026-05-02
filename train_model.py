@@ -71,6 +71,8 @@ def main():
                         help='TD3 delayed actor update interval.')
     parser.add_argument('--update-every', type=int, default=10,
                         help='Run one gradient update every N environment steps.')
+    parser.add_argument('--device', choices=['auto', 'cuda', 'cpu', 'mps'], default='auto',
+                        help='Torch device for neural network training.')
     parser.add_argument('--save-dir', default='models')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
@@ -89,6 +91,7 @@ def main():
     print(f'  - Batch size: {args.batch_size}')
     print(f'  - Buffer size: {args.buffer_size}')
     print(f'  - Update every: {args.update_every} steps')
+    print(f'  - Device: {args.device}')
     print('  - Environment: VolcanicAshEnv (Gymnasium)')
     print()
 
@@ -123,9 +126,11 @@ def main():
         policy_noise=args.policy_noise,
         noise_clip=args.noise_clip,
         policy_delay=args.policy_delay,
+        device=args.device,
         save_dir=args.save_dir,
         scene_configs=scene_configs
     )
+    print(f'Using torch device: {trainer.agent.device}')
 
     if args.load_model:
         trainer.agent.load_model(args.load_model)

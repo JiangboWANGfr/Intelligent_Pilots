@@ -29,6 +29,7 @@ class Trainer:
                  policy_noise: float = 0.2,
                  noise_clip: float = 0.5,
                  policy_delay: int = 2,
+                 device: str = 'auto',
                  scene_configs: Optional[List[VolcanicAshConfig]] = None):
         
         self.config = config
@@ -59,7 +60,8 @@ class Trainer:
             batch_size=batch_size,
             policy_noise=policy_noise,
             noise_clip=noise_clip,
-            policy_delay=policy_delay
+            policy_delay=policy_delay,
+            device=device
         )
         
         self.noise_scale = 0.3
@@ -82,6 +84,7 @@ class Trainer:
             'termination_reasons': [],
             'scene_names': [],
             'algorithm': self.algorithm,
+            'device': str(self.agent.device),
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
     

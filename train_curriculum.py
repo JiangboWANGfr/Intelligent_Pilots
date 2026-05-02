@@ -77,6 +77,7 @@ def train_stage(stage: Dict,
                 noise_clip: float,
                 policy_delay: int,
                 update_every: int,
+                device: str,
                 load_model: Optional[str] = None,
                 episodes_override: Optional[int] = None) -> str:
     base_config = load_base_config(config_path)
@@ -112,6 +113,7 @@ def train_stage(stage: Dict,
         policy_noise=policy_noise,
         noise_clip=noise_clip,
         policy_delay=policy_delay,
+        device=device,
         save_dir=save_dir,
         scene_configs=scene_configs
     )
@@ -119,6 +121,7 @@ def train_stage(stage: Dict,
     if load_model:
         trainer.agent.load_model(load_model)
         print(f'Loaded previous model: {load_model}')
+    print(f'Using torch device: {trainer.agent.device}')
 
     trainer.train(update_every=update_every, log_interval=50)
     return os.path.join(save_dir, 'final_model.pth')
@@ -147,6 +150,7 @@ def main():
     parser.add_argument('--noise-clip', type=float, default=0.5)
     parser.add_argument('--policy-delay', type=int, default=2)
     parser.add_argument('--update-every', type=int, default=10)
+    parser.add_argument('--device', choices=['auto', 'cuda', 'cpu', 'mps'], default='auto')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to load before the first selected stage.')
     args = parser.parse_args()
@@ -177,6 +181,7 @@ def main():
             noise_clip=args.noise_clip,
             policy_delay=args.policy_delay,
             update_every=args.update_every,
+            device=args.device,
             load_model=previous_model,
             episodes_override=args.episodes
         )

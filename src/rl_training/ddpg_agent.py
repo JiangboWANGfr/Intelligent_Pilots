@@ -10,6 +10,21 @@ import os
 from datetime import datetime
 
 
+def resolve_device(device: str = 'auto') -> torch.device:
+    requested = (device or 'auto').lower()
+    if requested == 'auto':
+        if torch.cuda.is_available():
+            return torch.device('cuda')
+        if getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available():
+            return torch.device('mps')
+        return torch.device('cpu')
+    if requested == 'cuda' and not torch.cuda.is_available():
+        raise RuntimeError('CUDA was requested but is not available in this PyTorch environment.')
+    if requested == 'mps' and not (getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available()):
+        raise RuntimeError('MPS was requested but is not available in this PyTorch environment.')
+    return torch.device(requested)
+
+
 class ActorNetwork(nn.Module):
     def __init__(self, state_dim: int, action_dim: int, hidden_size: int = 256):
         super().__init__()
@@ -73,20 +88,22 @@ class DDPGAgent:
                  tau: float = 0.005,
                  buffer_size: int = 100000,
                  batch_size: int = 64,
-                 hidden_size: int = 256):
+                 hidden_size: int = 256,
+                 device: str = 'auto'):
         
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
+        self.device = resolve_device(device)
         
-        self.actor = ActorNetwork(state_dim, action_dim, hidden_size)
-        self.actor_target = ActorNetwork(state_dim, action_dim, hidden_size)
+        self.actor = ActorNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.actor_target = ActorNetwork(state_dim, action_dim, hidden_size).to(self.device)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=learning_rate)
         
-        self.critic = CriticNetwork(state_dim, action_dim, hidden_size)
-        self.critic_target = CriticNetwork(state_dim, action_dim, hidden_size)
+        self.critic = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.critic_target = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
         
         self.hard_update(self.actor, self.actor_target)
@@ -116,7 +133,7 @@ class DDPGAgent:
         if isinstance(state, dict):
             state = self.flatten_state(state)
         
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         
         self.actor.eval()
         with torch.no_grad():
@@ -148,11 +165,11 @@ class DDPGAgent:
         states, actions, rewards, next_states, dones = \
             self.replay_buffer.sample(self.batch_size)
         
-        states = torch.FloatTensor(states)
-        actions = torch.FloatTensor(actions)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1)
-        next_states = torch.FloatTensor(next_states)
-        dones = torch.FloatTensor(dones).unsqueeze(1)
+        states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+        actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
+        rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_states = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        dones = torch.as_tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
         
         with torch.no_grad():
             next_actions = self.actor_target(next_states)
@@ -192,13 +209,14 @@ class DDPGAgent:
             'critic_optimizer_state_dict': self.critic_optimizer.state_dict(),
             'training_stats': self.training_stats,
             'state_dim': self.state_dim,
-            'action_dim': self.action_dim
+            'action_dim': self.action_dim,
+            'device': str(self.device)
         }
         
         torch.save(checkpoint, filepath)
     
     def load_model(self, filepath: str):
-        checkpoint = torch.load(filepath, map_location='cpu')
+        checkpoint = torch.load(filepath, map_location=self.device)
 
         if checkpoint.get('algorithm') == 'td3' or 'critic1_state_dict' in checkpoint:
             raise ValueError('This checkpoint is TD3. Use TD3Agent to load it.')
@@ -224,7 +242,8 @@ class TD3Agent:
                  hidden_size: int = 256,
                  policy_noise: float = 0.2,
                  noise_clip: float = 0.5,
-                 policy_delay: int = 2):
+                 policy_delay: int = 2,
+                 device: str = 'auto'):
 
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -235,15 +254,16 @@ class TD3Agent:
         self.noise_clip = noise_clip
         self.policy_delay = policy_delay
         self.total_it = 0
+        self.device = resolve_device(device)
 
-        self.actor = ActorNetwork(state_dim, action_dim, hidden_size)
-        self.actor_target = ActorNetwork(state_dim, action_dim, hidden_size)
+        self.actor = ActorNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.actor_target = ActorNetwork(state_dim, action_dim, hidden_size).to(self.device)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=learning_rate)
 
-        self.critic1 = CriticNetwork(state_dim, action_dim, hidden_size)
-        self.critic2 = CriticNetwork(state_dim, action_dim, hidden_size)
-        self.critic1_target = CriticNetwork(state_dim, action_dim, hidden_size)
-        self.critic2_target = CriticNetwork(state_dim, action_dim, hidden_size)
+        self.critic1 = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.critic2 = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.critic1_target = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
+        self.critic2_target = CriticNetwork(state_dim, action_dim, hidden_size).to(self.device)
         self.critic_optimizer = optim.Adam(
             list(self.critic1.parameters()) + list(self.critic2.parameters()),
             lr=learning_rate
@@ -276,7 +296,7 @@ class TD3Agent:
         if isinstance(state, dict):
             state = self.flatten_state(state)
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
 
         self.actor.eval()
         with torch.no_grad():
@@ -298,11 +318,11 @@ class TD3Agent:
         states, actions, rewards, next_states, dones = \
             self.replay_buffer.sample(self.batch_size)
 
-        states = torch.FloatTensor(states)
-        actions = torch.FloatTensor(actions)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1)
-        next_states = torch.FloatTensor(next_states)
-        dones = torch.FloatTensor(dones).unsqueeze(1)
+        states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+        actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
+        rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_states = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        dones = torch.as_tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
 
         with torch.no_grad():
             noise = torch.randn_like(actions) * self.policy_noise
@@ -357,13 +377,14 @@ class TD3Agent:
             'policy_noise': self.policy_noise,
             'noise_clip': self.noise_clip,
             'policy_delay': self.policy_delay,
-            'total_it': self.total_it
+            'total_it': self.total_it,
+            'device': str(self.device)
         }
 
         torch.save(checkpoint, filepath)
 
     def load_model(self, filepath: str):
-        checkpoint = torch.load(filepath, map_location='cpu')
+        checkpoint = torch.load(filepath, map_location=self.device)
 
         if checkpoint.get('algorithm') not in (None, 'td3'):
             raise ValueError(f"Checkpoint algorithm is {checkpoint.get('algorithm')}, not td3")

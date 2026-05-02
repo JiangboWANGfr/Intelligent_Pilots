@@ -257,6 +257,7 @@ def train_model():
             policy_noise=data.get('policy_noise', 0.2),
             noise_clip=data.get('noise_clip', 0.5),
             policy_delay=data.get('policy_delay', 2),
+            device=data.get('device', 'auto'),
             save_dir='models',
             scene_configs=scene_configs
         )
