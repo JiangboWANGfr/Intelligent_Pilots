@@ -49,8 +49,9 @@ if os.path.exists(model_path):
     try:
         temp_env = VolcanicAshEnv(config)
         state_dim = len(DDPGAgent.flatten_state(temp_env.reset()[0]))
+        action_dim = int(np.prod(temp_env.action_space.shape))
         algorithm = infer_checkpoint_algorithm(model_path)
-        agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
+        agent = create_agent(algorithm, state_dim=state_dim, action_dim=action_dim)
         agent.load_model(model_path)
         print('      [OK] Model loaded:', model_path)
 

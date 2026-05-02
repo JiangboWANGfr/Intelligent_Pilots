@@ -67,6 +67,8 @@ def train_stage(stage: Dict,
                 config_path: str,
                 save_root: str,
                 max_steps: int,
+                cruise_speed: Optional[float],
+                cruise_speed_mode: str,
                 learning_rate: float,
                 batch_size: int,
                 buffer_size: int,
@@ -81,7 +83,20 @@ def train_stage(stage: Dict,
                 load_model: Optional[str] = None,
                 episodes_override: Optional[int] = None) -> str:
     base_config = load_base_config(config_path)
+    if cruise_speed is not None:
+        base_config.fixed_cruise_speed = cruise_speed
+    base_config.cruise_speed_mode = cruise_speed_mode
+
     scene_configs = get_training_scene_configs(stage['scenes'])
+    for scene in scene_configs:
+        scene.fixed_cruise_speed = base_config.fixed_cruise_speed
+        scene.min_cruise_speed = base_config.min_cruise_speed
+        scene.max_cruise_speed = base_config.max_cruise_speed
+        scene.cruise_speed_mode = base_config.cruise_speed_mode
+        scene.path_corridor_radius = base_config.path_corridor_radius
+        scene.path_lookahead_distance = base_config.path_lookahead_distance
+        scene.reference_path_points = base_config.reference_path_points
+
     stage_config = VolcanicAshConfig.from_dict(scene_configs[0].to_dict())
     stage_config.geo_center_lat = base_config.geo_center_lat
     stage_config.geo_center_lon = base_config.geo_center_lon
@@ -96,6 +111,7 @@ def train_stage(stage: Dict,
     print(f"Training stage: {stage['name']}")
     print(f"Algorithm: {algorithm.upper()}")
     print(f"Episodes: {episodes}")
+    print(f"Cruise speed: {stage_config.fixed_cruise_speed} ({stage_config.cruise_speed_mode})")
     print(f"Scenes: {', '.join(stage['scenes'])}")
     print(f"Save dir: {save_dir}")
     print('=' * 80)
@@ -151,6 +167,10 @@ def main():
     parser.add_argument('--policy-delay', type=int, default=2)
     parser.add_argument('--update-every', type=int, default=10)
     parser.add_argument('--device', choices=['auto', 'cuda', 'cpu', 'mps'], default='auto')
+    parser.add_argument('--cruise-speed', type=float, default=None,
+                        help='Fixed per-step cruise speed for every selected stage.')
+    parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
+                        help='fixed uses --cruise-speed/config speed; random samples once per episode.')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to load before the first selected stage.')
     args = parser.parse_args()
@@ -171,6 +191,8 @@ def main():
             config_path=args.config,
             save_root=args.save_root,
             max_steps=args.max_steps,
+            cruise_speed=args.cruise_speed,
+            cruise_speed_mode=args.cruise_speed_mode,
             learning_rate=args.learning_rate,
             batch_size=args.batch_size,
             buffer_size=args.buffer_size,

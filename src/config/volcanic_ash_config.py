@@ -34,6 +34,13 @@ class VolcanicAshConfig:
     geo_span_lat: float = 2.0
     geo_span_lon: float = 2.0
     success_threshold: float = 20.0
+    fixed_cruise_speed: float = 9.0
+    min_cruise_speed: float = 7.0
+    max_cruise_speed: float = 13.0
+    cruise_speed_mode: str = "fixed"
+    path_corridor_radius: float = 30.0
+    path_lookahead_distance: float = 45.0
+    reference_path_points: int = 160
     centers: List[Dict] = None
     scene_name: str = ""
     training_scene_names: List[str] = None
@@ -68,6 +75,13 @@ class VolcanicAshConfig:
             'geo_span_lat': self.geo_span_lat,
             'geo_span_lon': self.geo_span_lon,
             'success_threshold': self.success_threshold,
+            'fixed_cruise_speed': self.fixed_cruise_speed,
+            'min_cruise_speed': self.min_cruise_speed,
+            'max_cruise_speed': self.max_cruise_speed,
+            'cruise_speed_mode': self.cruise_speed_mode,
+            'path_corridor_radius': self.path_corridor_radius,
+            'path_lookahead_distance': self.path_lookahead_distance,
+            'reference_path_points': self.reference_path_points,
             'centers': self.centers,
             'scene_name': self.scene_name,
             'training_scene_names': self.training_scene_names,

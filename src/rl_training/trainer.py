@@ -47,7 +47,7 @@ class Trainer:
         self.env.max_steps = max_steps_per_episode
         
         state_dim = self._calculate_state_dim()
-        action_dim = 2
+        action_dim = int(np.prod(self.env.action_space.shape))
         
         self.agent = create_agent(
             self.algorithm,
@@ -80,6 +80,9 @@ class Trainer:
             'max_concentrations': [],
             'avg_concentrations': [],
             'fuel_consumptions': [],
+            'ash_exposures': [],
+            'path_progress_ratios': [],
+            'cross_track_errors': [],
             'final_distances': [],
             'termination_reasons': [],
             'scene_names': [],
@@ -109,6 +112,7 @@ class Trainer:
             loss_count = 0
             actor_loss_count = 0
             concentrations = [float(reset_info.get('current_concentration', 0.0))]
+            cross_track_errors = [float(reset_info.get('cross_track_error', 0.0))]
             danger_violation = bool(reset_info.get('is_in_danger_zone', False))
             success = False
             timeout = False
@@ -122,6 +126,7 @@ class Trainer:
                 final_info = info
                 current_concentration = float(info.get('current_concentration', 0.0))
                 concentrations.append(current_concentration)
+                cross_track_errors.append(float(info.get('cross_track_error', 0.0)))
                 danger_violation = danger_violation or bool(info.get('is_in_danger_zone', False))
                 
                 done = terminated or truncated
@@ -183,6 +188,9 @@ class Trainer:
             self.training_history['max_concentrations'].append(max(concentrations))
             self.training_history['avg_concentrations'].append(float(np.mean(concentrations)))
             self.training_history['fuel_consumptions'].append(float(final_info.get('fuel_consumed', 0.0)))
+            self.training_history['ash_exposures'].append(float(final_info.get('ash_exposure', 0.0)))
+            self.training_history['path_progress_ratios'].append(float(final_info.get('path_progress_ratio', 0.0)))
+            self.training_history['cross_track_errors'].append(float(np.mean(cross_track_errors)))
             self.training_history['final_distances'].append(float(final_info.get('distance_to_target', 0.0)))
             self.training_history['termination_reasons'].append(termination_reason)
             self.training_history['scene_names'].append(current_scene_name)

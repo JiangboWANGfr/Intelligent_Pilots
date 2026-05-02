@@ -45,6 +45,24 @@ def build_scene_configs(config: VolcanicAshConfig,
     return [VolcanicAshConfig.from_dict(config.to_dict())]
 
 
+def apply_aircraft_runtime_config(config: VolcanicAshConfig,
+                                  scene_configs: List[VolcanicAshConfig],
+                                  cruise_speed: Optional[float],
+                                  cruise_speed_mode: str) -> None:
+    if cruise_speed is not None:
+        config.fixed_cruise_speed = cruise_speed
+    config.cruise_speed_mode = cruise_speed_mode
+
+    for scene in scene_configs:
+        scene.fixed_cruise_speed = config.fixed_cruise_speed
+        scene.min_cruise_speed = config.min_cruise_speed
+        scene.max_cruise_speed = config.max_cruise_speed
+        scene.cruise_speed_mode = config.cruise_speed_mode
+        scene.path_corridor_radius = config.path_corridor_radius
+        scene.path_lookahead_distance = config.path_lookahead_distance
+        scene.reference_path_points = config.reference_path_points
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train the volcanic ash avoidance RL model.')
     parser.add_argument('--config', default='output/current_config.json',
@@ -73,6 +91,10 @@ def main():
                         help='Run one gradient update every N environment steps.')
     parser.add_argument('--device', choices=['auto', 'cuda', 'cpu', 'mps'], default='auto',
                         help='Torch device for neural network training.')
+    parser.add_argument('--cruise-speed', type=float, default=None,
+                        help='Fixed per-step cruise speed used by the aircraft model.')
+    parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
+                        help='fixed uses --cruise-speed/config speed; random samples once per episode.')
     parser.add_argument('--save-dir', default='models')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
@@ -101,6 +123,12 @@ def main():
         scene_names=parse_scene_names(args.scenes),
         use_all_scenes=args.all_scenes
     )
+    apply_aircraft_runtime_config(
+        config,
+        scene_configs,
+        cruise_speed=args.cruise_speed,
+        cruise_speed_mode=args.cruise_speed_mode
+    )
     config.training_scene_names = [scene.scene_name for scene in scene_configs]
 
     print(f'Volcanic Ash Model: {config.model_type}')
@@ -108,6 +136,8 @@ def main():
     print(f'  Cloud size: {config.cloud_size}')
     print(f'  Threshold: {config.concentration_threshold}')
     print(f'  Geo position: ({config.geo_center_lat}, {config.geo_center_lon})')
+    print(f'  Cruise speed: {config.fixed_cruise_speed} ({config.cruise_speed_mode})')
+    print(f'  Path corridor radius: {config.path_corridor_radius}')
     print(f'  Training scenes: {len(scene_configs)}')
     for scene in scene_configs:
         print(f'    - {scene.scene_name or scene.model_type}')

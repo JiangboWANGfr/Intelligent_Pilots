@@ -161,10 +161,11 @@ def build_agent_for_config(config, model_path=None, allow_missing_model=False):
 
     env = VolcanicAshEnv(config)
     state_dim = len(DDPGAgent.flatten_state(env.reset()[0]))
+    action_dim = int(np.prod(env.action_space.shape))
     algorithm = 'td3'
     if model_path and os.path.exists(model_path):
         algorithm = infer_checkpoint_algorithm(model_path)
-    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=action_dim)
 
     if model_path:
         if not os.path.exists(model_path):

@@ -33,8 +33,9 @@ class ValidationPipeline:
 
         temp_env = VolcanicAshEnv(self.base_config)
         state_dim = len(DDPGAgent.flatten_state(temp_env.reset()[0]))
+        action_dim = int(np.prod(temp_env.action_space.shape))
         algorithm = infer_checkpoint_algorithm(self.model_path)
-        agent = create_agent(algorithm, state_dim=state_dim, action_dim=2)
+        agent = create_agent(algorithm, state_dim=state_dim, action_dim=action_dim)
         agent.load_model(self.model_path)
         self.agent = agent
         return self.agent

@@ -26,6 +26,24 @@ def build_scene_configs(config: VolcanicAshConfig,
     return [VolcanicAshConfig.from_dict(config.to_dict())]
 
 
+def apply_aircraft_runtime_config(config: VolcanicAshConfig,
+                                  scene_configs: List[VolcanicAshConfig],
+                                  cruise_speed: Optional[float],
+                                  cruise_speed_mode: str) -> None:
+    if cruise_speed is not None:
+        config.fixed_cruise_speed = cruise_speed
+    config.cruise_speed_mode = cruise_speed_mode
+
+    for scene in scene_configs:
+        scene.fixed_cruise_speed = config.fixed_cruise_speed
+        scene.min_cruise_speed = config.min_cruise_speed
+        scene.max_cruise_speed = config.max_cruise_speed
+        scene.cruise_speed_mode = config.cruise_speed_mode
+        scene.path_corridor_radius = config.path_corridor_radius
+        scene.path_lookahead_distance = config.path_lookahead_distance
+        scene.reference_path_points = config.reference_path_points
+
+
 def infer_algorithm(model_path: str, requested: str) -> str:
     if requested != 'auto':
         return requested
@@ -41,6 +59,7 @@ def evaluate_episode(env: VolcanicAshEnv,
     total_reward = 0.0
     path_length = 0.0
     concentrations = [float(info.get('current_concentration', 0.0))]
+    cross_track_errors = [float(info.get('cross_track_error', 0.0))]
     danger_violation = bool(info.get('is_in_danger_zone', False))
     terminated = False
     truncated = False
@@ -56,6 +75,7 @@ def evaluate_episode(env: VolcanicAshEnv,
 
         concentration = float(info.get('current_concentration', 0.0))
         concentrations.append(concentration)
+        cross_track_errors.append(float(info.get('cross_track_error', 0.0)))
         danger_violation = danger_violation or bool(info.get('is_in_danger_zone', False))
         total_reward += float(reward)
         state = next_state
@@ -84,6 +104,9 @@ def evaluate_episode(env: VolcanicAshEnv,
         'steps': step + 1,
         'total_reward': total_reward,
         'fuel_consumed': float(info.get('fuel_consumed', 0.0)),
+        'ash_exposure': float(info.get('ash_exposure', 0.0)),
+        'path_progress_ratio': float(info.get('path_progress_ratio', 0.0)),
+        'avg_cross_track_error': float(np.mean(cross_track_errors)),
         'final_distance': float(info.get('distance_to_target', 0.0)),
         'path_length': path_length,
         'max_concentration': float(max(concentrations)),
@@ -101,6 +124,9 @@ def summarize(results: List[Dict]) -> Dict:
         'avg_reward': float(np.mean([r['total_reward'] for r in results])) if results else 0.0,
         'avg_steps': float(np.mean([r['steps'] for r in results])) if results else 0.0,
         'avg_fuel': float(np.mean([r['fuel_consumed'] for r in results])) if results else 0.0,
+        'avg_ash_exposure': float(np.mean([r['ash_exposure'] for r in results])) if results else 0.0,
+        'avg_path_progress_ratio': float(np.mean([r['path_progress_ratio'] for r in results])) if results else 0.0,
+        'avg_cross_track_error': float(np.mean([r['avg_cross_track_error'] for r in results])) if results else 0.0,
         'avg_path_length': float(np.mean([r['path_length'] for r in results])) if results else 0.0,
         'avg_max_concentration': float(np.mean([r['max_concentration'] for r in results])) if results else 0.0,
         'avg_concentration': float(np.mean([r['avg_concentration'] for r in results])) if results else 0.0,
@@ -126,6 +152,10 @@ def main():
                         help='Base random seed. Episode i uses seed + i.')
     parser.add_argument('--scenes', default=None,
                         help='Comma-separated preset scene names. Defaults to the config itself.')
+    parser.add_argument('--cruise-speed', type=float, default=None,
+                        help='Fixed per-step cruise speed used during evaluation.')
+    parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
+                        help='fixed uses --cruise-speed/config speed; random samples once per episode.')
     parser.add_argument('--output', default='output/evaluation_results.json',
                         help='Where to write detailed JSON results.')
     args = parser.parse_args()
@@ -137,15 +167,22 @@ def main():
 
     config = VolcanicAshConfig.load(args.config)
     scene_configs = build_scene_configs(config, parse_scene_names(args.scenes))
+    apply_aircraft_runtime_config(
+        config,
+        scene_configs,
+        cruise_speed=args.cruise_speed,
+        cruise_speed_mode=args.cruise_speed_mode
+    )
     env = VolcanicAshEnv(config, scene_configs=scene_configs)
     env.max_steps = args.max_steps
 
     obs, _ = env.reset(seed=args.seed)
     state_dim = len(DDPGAgent.flatten_state(obs))
+    action_dim = int(np.prod(env.action_space.shape))
     env.scene_cursor = -1
 
     algorithm = infer_algorithm(args.model, args.algorithm)
-    agent = create_agent(algorithm, state_dim=state_dim, action_dim=2, device=args.device)
+    agent = create_agent(algorithm, state_dim=state_dim, action_dim=action_dim, device=args.device)
     agent.load_model(args.model)
 
     results = [
@@ -159,6 +196,8 @@ def main():
         'algorithm': algorithm,
         'device': str(agent.device),
         'config_path': args.config,
+        'fixed_cruise_speed': config.fixed_cruise_speed,
+        'cruise_speed_mode': config.cruise_speed_mode,
         'scene_names': [scene.scene_name or scene.model_type for scene in scene_configs],
         'seed': args.seed,
         'max_steps': args.max_steps,

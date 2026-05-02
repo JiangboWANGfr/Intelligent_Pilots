@@ -153,10 +153,14 @@ class DDPGAgent:
         state_list.extend(state_dict['aircraft_pos'])
         state_list.extend(state_dict['goal_vector'])
         state_list.extend(state_dict['heading_vec'])
-        state_list.extend(state_dict['speed'])
+        speed_value = state_dict.get('cruise_speed', state_dict.get('speed'))
+        state_list.extend(speed_value)
         state_list.extend(state_dict['distance_to_target'])
         state_list.extend(state_dict['current_concentration'])
         state_list.extend(state_dict['forward_concentration'])
+        state_list.extend(state_dict['lookahead_vector'])
+        state_list.extend(state_dict['cross_track_error'])
+        state_list.extend(state_dict['path_progress_ratio'])
         return np.array(state_list, dtype=np.float32)
     
     def train_step(self):
@@ -221,6 +225,18 @@ class DDPGAgent:
 
         if checkpoint.get('algorithm') == 'td3' or 'critic1_state_dict' in checkpoint:
             raise ValueError('This checkpoint is TD3. Use TD3Agent to load it.')
+        checkpoint_state_dim = checkpoint.get('state_dim')
+        checkpoint_action_dim = checkpoint.get('action_dim')
+        if checkpoint_state_dim is not None and checkpoint_state_dim != self.state_dim:
+            raise ValueError(
+                f'Checkpoint state_dim={checkpoint_state_dim} does not match '
+                f'environment state_dim={self.state_dim}. Retrain with the current observation space.'
+            )
+        if checkpoint_action_dim is not None and checkpoint_action_dim != self.action_dim:
+            raise ValueError(
+                f'Checkpoint action_dim={checkpoint_action_dim} does not match '
+                f'environment action_dim={self.action_dim}. Retrain with the fixed-speed turn controller.'
+            )
         
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
@@ -391,6 +407,18 @@ class TD3Agent:
             raise ValueError(f"Checkpoint algorithm is {checkpoint.get('algorithm')}, not td3")
         if 'critic1_state_dict' not in checkpoint:
             raise ValueError('This checkpoint does not contain TD3 critics. Train a new TD3 model first.')
+        checkpoint_state_dim = checkpoint.get('state_dim')
+        checkpoint_action_dim = checkpoint.get('action_dim')
+        if checkpoint_state_dim is not None and checkpoint_state_dim != self.state_dim:
+            raise ValueError(
+                f'Checkpoint state_dim={checkpoint_state_dim} does not match '
+                f'environment state_dim={self.state_dim}. Retrain with the current observation space.'
+            )
+        if checkpoint_action_dim is not None and checkpoint_action_dim != self.action_dim:
+            raise ValueError(
+                f'Checkpoint action_dim={checkpoint_action_dim} does not match '
+                f'environment action_dim={self.action_dim}. Retrain with the fixed-speed turn controller.'
+            )
 
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.actor_target.load_state_dict(checkpoint['actor_target_state_dict'])

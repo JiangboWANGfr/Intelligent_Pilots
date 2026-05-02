@@ -86,6 +86,7 @@ class PathPlanner:
             'waypoints': [],
             'total_reward': 0.0,
             'total_fuel': 0.0,
+            'ash_exposure': 0.0,
             'max_concentration': 0.0,
             'success': False,
             'steps_taken': 0,
@@ -101,7 +102,9 @@ class PathPlanner:
 
         cumulative_reward = 0.0
         cumulative_fuel = 0.0
+        cumulative_ash_exposure = 0.0
         previous_point = None
+        previous_concentration = 0.0
         for step, point in enumerate(path_points):
             py = float(np.clip(point[0], 0, self.config.image_size[0] - 1))
             px = float(np.clip(point[1], 0, self.config.image_size[1] - 1))
@@ -117,6 +120,8 @@ class PathPlanner:
                 dx = px - previous_point[1]
                 step_distance = float(np.hypot(dy, dx))
                 cumulative_fuel += 0.12 + step_distance * 0.012
+                mean_concentration = (previous_concentration + concentration) * 0.5
+                cumulative_ash_exposure += mean_concentration * step_distance
 
             reward_delta = -step_distance * 0.18 - concentration * (35.0 if concentration > self.config.concentration_threshold else 10.0)
             cumulative_reward += reward_delta
@@ -130,6 +135,7 @@ class PathPlanner:
                 'velocity_x': dx,
                 'velocity_y': dy,
                 'concentration': concentration,
+                'ash_exposure': cumulative_ash_exposure,
                 'cumulative_reward': cumulative_reward,
                 'cumulative_fuel': cumulative_fuel
             }
@@ -138,6 +144,7 @@ class PathPlanner:
             path_data['geo_coordinates'].append([lon, lat])
             path_data['max_concentration'] = max(path_data['max_concentration'], concentration)
             previous_point = (py, px)
+            previous_concentration = concentration
 
         final_point = np.array(path_points[-1], dtype=np.float32)
         target_reference = np.array(target_pixel if target_pixel is not None else path_points[-1], dtype=np.float32)
@@ -147,6 +154,7 @@ class PathPlanner:
 
         path_data['total_reward'] = float(cumulative_reward)
         path_data['total_fuel'] = float(cumulative_fuel)
+        path_data['ash_exposure'] = float(cumulative_ash_exposure)
         path_data['steps_taken'] = len(path_data['waypoints'])
         if start_geo is not None:
             path_data['start_geo'] = list(start_geo)
@@ -166,29 +174,30 @@ class PathPlanner:
             raise ValueError("No trained agent loaded. Please load a model first.")
         
         self.env.aircraft_pos = np.array(start_pos, dtype=np.float32)
-        self.env.target_pos = np.array(target_pos, dtype=np.float32)
-        delta = self.env.target_pos - self.env.aircraft_pos
-        self.env.heading = float(np.arctan2(-float(delta[0]), float(delta[1])))
-        self.env.speed = self.env.cruise_speed
-        self.env.prev_action = np.zeros(2, dtype=np.float32)
-        self.env.step_count = 0
-        self.env.trajectory = [self.env.aircraft_pos.copy()]
-        self.env.total_fuel_consumption = 0.0
-        self.env.max_concentration_exposure = 0.0
-        self.env.prev_distance_to_target = float(np.linalg.norm(
-            self.env.target_pos - self.env.aircraft_pos
-        ))
+        reference_path = self.fallback_planner.plan(
+            self.concentration_map,
+            tuple(start_pos),
+            tuple(target_pos),
+            max_concentration=self.config.concentration_threshold,
+            desired_points=max(160, max_steps)
+        )
+        state, _ = self.env.initialize_flight(
+            start_pos=start_pos,
+            target_pos=target_pos,
+            reference_path=reference_path
+        )
         
-        state, _ = self.env._get_observation(), {}
         path_data = {
             'waypoints': [],
             'total_reward': 0,
             'total_fuel': 0,
+            'ash_exposure': 0,
             'max_concentration': 0,
             'success': False,
             'steps_taken': 0,
             'path_coordinates': [],
             'geo_coordinates': [],
+            'reference_path': [[float(point[1]), float(point[0])] for point in reference_path],
             'planning_method': 'rl',
             'scene_name': self.env.scene_name
         }
@@ -201,8 +210,10 @@ class PathPlanner:
             
             path_data['total_reward'] += reward
             path_data['total_fuel'] = info['fuel_consumed']
+            path_data['ash_exposure'] = info.get('ash_exposure', 0.0)
             path_data['max_concentration'] = max(path_data['max_concentration'],
-                                                  info['current_concentration'])
+                                                  info.get('segment_max_concentration',
+                                                           info['current_concentration']))
             
             current_pos = self.env.aircraft_pos.copy()
             velocity_y = float(current_pos[0] - previous_pos[0])
@@ -219,6 +230,11 @@ class PathPlanner:
                 'velocity_x': velocity_x,
                 'velocity_y': velocity_y,
                 'concentration': float(info['current_concentration']),
+                'segment_mean_concentration': float(info.get('segment_mean_concentration', 0.0)),
+                'segment_max_concentration': float(info.get('segment_max_concentration', 0.0)),
+                'ash_exposure': float(info.get('ash_exposure', 0.0)),
+                'cross_track_error': float(info.get('cross_track_error', 0.0)),
+                'path_progress_ratio': float(info.get('path_progress_ratio', 0.0)),
                 'speed': float(info.get('speed', self.env.speed)),
                 'heading': float(info.get('heading', self.env.heading)),
                 'cumulative_reward': path_data['total_reward'],
@@ -357,6 +373,7 @@ class PathPlanner:
                 'summary': {
                     'total_reward': float(path_data['total_reward']),
                     'total_fuel_consumption': float(path_data['total_fuel']),
+                    'ash_exposure': float(path_data.get('ash_exposure', 0.0)),
                     'max_concentration_exposure': float(path_data.get('max_concentration', 0))
                 }
             },
