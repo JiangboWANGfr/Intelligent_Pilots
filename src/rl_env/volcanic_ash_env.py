@@ -39,16 +39,13 @@ class VolcanicAshEnv(gym.Env):
         
         self.height, self.width = self.config.image_size
         self.observation_space = spaces.Dict({
-            'aircraft_pos': spaces.Box(low=0, high=max(self.height, self.width),
-                                       shape=(2,), dtype=np.float32),
-            'target_pos': spaces.Box(low=0, high=max(self.height, self.width),
-                                     shape=(2,), dtype=np.float32),
+            'aircraft_pos': spaces.Box(low=0, high=1, shape=(2,), dtype=np.float32),
+            'target_pos': spaces.Box(low=0, high=1, shape=(2,), dtype=np.float32),
+            'goal_vector': spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'local_concentration': spaces.Box(low=0, high=1, shape=(9,),
                                              dtype=np.float32),
-            'velocity': spaces.Box(low=-10, high=10, shape=(2,),
-                                   dtype=np.float32),
-            'distance_to_target': spaces.Box(low=0, high=1000, shape=(1,),
-                                            dtype=np.float32)
+            'velocity': spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            'distance_to_target': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         })
         self.safety_threshold = self.config.concentration_threshold
         self.danger_threshold = self.config.concentration_threshold * 1.5
@@ -68,24 +65,49 @@ class VolcanicAshEnv(gym.Env):
         self.trajectory = []
         self.total_fuel_consumption = 0.0
         self.max_concentration_exposure = 0.0
+        self.prev_distance_to_target = 0.0
     
     def _update_environment_shape(self):
         self.height, self.width = self.config.image_size
         self.observation_space = spaces.Dict({
-            'aircraft_pos': spaces.Box(low=0, high=max(self.height, self.width),
-                                       shape=(2,), dtype=np.float32),
-            'target_pos': spaces.Box(low=0, high=max(self.height, self.width),
-                                     shape=(2,), dtype=np.float32),
+            'aircraft_pos': spaces.Box(low=0, high=1, shape=(2,), dtype=np.float32),
+            'target_pos': spaces.Box(low=0, high=1, shape=(2,), dtype=np.float32),
+            'goal_vector': spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'local_concentration': spaces.Box(low=0, high=1, shape=(9,),
                                              dtype=np.float32),
-            'velocity': spaces.Box(low=-10, high=10, shape=(2,),
-                                   dtype=np.float32),
-            'distance_to_target': spaces.Box(low=0, high=1000, shape=(1,),
-                                            dtype=np.float32)
+            'velocity': spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            'distance_to_target': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         })
         self.safety_threshold = self.config.concentration_threshold
         self.danger_threshold = self.config.concentration_threshold * 1.5
         self.success_threshold = self.config.success_threshold
+
+    def _get_concentration_at(self, pos: np.ndarray) -> float:
+        y = int(np.clip(pos[0], 0, self.height - 1))
+        x = int(np.clip(pos[1], 0, self.width - 1))
+        return float(self.concentration_map[y, x])
+
+    def _sample_safe_point(self, margin: int = 50, max_tries: int = 2000) -> np.ndarray:
+        safe_limit = self.safety_threshold * 0.8
+        margin_y = min(margin, max(0, (self.height - 2) // 2))
+        margin_x = min(margin, max(0, (self.width - 2) // 2))
+        low_y, high_y = margin_y, max(margin_y + 1, self.height - margin_y)
+        low_x, high_x = margin_x, max(margin_x + 1, self.width - margin_x)
+
+        for _ in range(max_tries):
+            pos = np.array([
+                self.np_random.integers(low_y, high_y),
+                self.np_random.integers(low_x, high_x)
+            ], dtype=np.float32)
+            if self._get_concentration_at(pos) < safe_limit:
+                return pos
+
+        safe_indices = np.argwhere(self.concentration_map < safe_limit)
+        if len(safe_indices) > 0:
+            idx = safe_indices[self.np_random.integers(0, len(safe_indices))]
+            return np.array([idx[0], idx[1]], dtype=np.float32)
+
+        return np.array([self.height // 2, self.width // 2], dtype=np.float32)
     
     def set_external_concentration_map(self, concentration_map: np.ndarray,
                                        config: Optional[VolcanicAshConfig] = None,
@@ -131,26 +153,23 @@ class VolcanicAshEnv(gym.Env):
             self.concentration_map = self.ash_model.generate_concentration_map()
         
         margin = 50
-        self.aircraft_pos = np.array([
-            self.np_random.integers(margin, self.height - margin),
-            self.np_random.integers(margin, self.width - margin)
-        ], dtype=np.float32)
-        
-        while True:
-            self.target_pos = np.array([
-                self.np_random.integers(margin, self.height - margin),
-                self.np_random.integers(margin, self.width - margin)
-            ], dtype=np.float32)
-            
+        self.aircraft_pos = self._sample_safe_point(margin)
+
+        min_distance = min(self.width, self.height) * 0.4
+        for _ in range(2000):
+            self.target_pos = self._sample_safe_point(margin)
             dist = np.linalg.norm(self.target_pos - self.aircraft_pos)
-            if dist > self.width * 0.4:
+            if dist > min_distance:
                 break
-        
+
         self.velocity = np.array([0.0, 0.0], dtype=np.float32)
         self.step_count = 0
         self.trajectory = [self.aircraft_pos.copy()]
         self.total_fuel_consumption = 0.0
         self.max_concentration_exposure = 0.0
+        self.prev_distance_to_target = float(np.linalg.norm(
+            self.target_pos - self.aircraft_pos
+        ))
         
         observation = self._get_observation()
         info = self._get_info()
@@ -173,14 +192,26 @@ class VolcanicAshEnv(gym.Env):
     
     def _get_observation(self) -> Dict:
         local_conc = self._get_local_concentration()
-        distance_to_target = np.linalg.norm(self.target_pos - self.aircraft_pos)
+        delta = self.target_pos - self.aircraft_pos
+        distance_to_target = np.linalg.norm(delta)
+        max_distance = np.sqrt(self.height ** 2 + self.width ** 2)
         
         return {
-            'aircraft_pos': self.aircraft_pos.copy(),
-            'target_pos': self.target_pos.copy(),
+            'aircraft_pos': np.array([
+                self.aircraft_pos[0] / self.height,
+                self.aircraft_pos[1] / self.width
+            ], dtype=np.float32),
+            'target_pos': np.array([
+                self.target_pos[0] / self.height,
+                self.target_pos[1] / self.width
+            ], dtype=np.float32),
+            'goal_vector': np.array([
+                delta[0] / self.height,
+                delta[1] / self.width
+            ], dtype=np.float32),
             'local_concentration': local_conc,
-            'velocity': self.velocity.copy(),
-            'distance_to_target': np.array([distance_to_target],
+            'velocity': (self.velocity / self.max_speed).astype(np.float32),
+            'distance_to_target': np.array([distance_to_target / max_distance],
                                           dtype=np.float32)
         }
     
@@ -229,30 +260,33 @@ class VolcanicAshEnv(gym.Env):
         self.trajectory.append(self.aircraft_pos.copy())
         
         distance_to_target = np.linalg.norm(self.target_pos - self.aircraft_pos)
+        progress = self.prev_distance_to_target - distance_to_target
+        self.prev_distance_to_target = float(distance_to_target)
         
         terminated = False
         truncated = False
         reward = 0.0
 
+        reward += 2.0 * progress
+        reward -= 20.0 * current_conc
+
         if distance_to_target < self.success_threshold:
-            reward += 100.0
+            reward += 200.0
             terminated = True
-        elif current_conc > self.danger_threshold:
-            reward -= 50.0
-            if current_conc > 0.9:
-                reward -= 100.0
-                terminated = True
-        elif current_conc > self.safety_threshold:
-            reward -= 20.0 * (current_conc - self.safety_threshold)
-        
-        progress_reward = -distance_to_target / 100.0
-        reward += progress_reward * 0.1
-        
-        reward -= fuel_cost * 0.5
+
+        if current_conc > self.danger_threshold:
+            reward -= 80.0
+
+        if current_conc > 0.9:
+            reward -= 200.0
+            terminated = True
+
+        reward -= fuel_cost * 0.2
+        reward -= 0.05 * np.linalg.norm(acceleration)
         
         if self.step_count >= self.max_steps:
             truncated = True
-            reward -= 50.0
+            reward -= 100.0
         
         observation = self._get_observation()
         info = self._get_info()

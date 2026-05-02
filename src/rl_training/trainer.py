@@ -38,6 +38,7 @@ class Trainer:
         os.makedirs(save_dir, exist_ok=True)
         
         self.env = VolcanicAshEnv(config, render_mode=None, scene_configs=self.scene_configs)
+        self.env.max_steps = max_steps_per_episode
         
         state_dim = self._calculate_state_dim()
         action_dim = 2

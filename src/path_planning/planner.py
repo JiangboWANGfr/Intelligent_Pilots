@@ -172,6 +172,9 @@ class PathPlanner:
         self.env.trajectory = [self.env.aircraft_pos.copy()]
         self.env.total_fuel_consumption = 0.0
         self.env.max_concentration_exposure = 0.0
+        self.env.prev_distance_to_target = float(np.linalg.norm(
+            self.env.target_pos - self.env.aircraft_pos
+        ))
         
         state, _ = self.env._get_observation(), {}
         path_data = {

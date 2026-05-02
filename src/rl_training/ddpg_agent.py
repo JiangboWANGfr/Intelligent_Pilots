@@ -135,6 +135,7 @@ class DDPGAgent:
         state_list = []
         state_list.extend(state_dict['aircraft_pos'])
         state_list.extend(state_dict['target_pos'])
+        state_list.extend(state_dict['goal_vector'])
         state_list.extend(state_dict['local_concentration'])
         state_list.extend(state_dict['velocity'])
         state_list.extend(state_dict['distance_to_target'])

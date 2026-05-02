@@ -10,8 +10,8 @@ print('='*70)
 print()
 print('Configuration:')
 print('  - Algorithm: DDPG (Deep Deterministic Policy Gradient)')
-print('  - Episodes: 300')
-print('  - Max steps per episode: 300')
+print('  - Episodes: 3000')
+print('  - Max steps per episode: 400')
 print('  - Learning rate: 0.0001')
 print('  - Environment: VolcanicAshEnv (Gymnasium)')
 print()
@@ -30,7 +30,7 @@ else:
 if config.training_scene_names:
     scene_configs = get_training_scene_configs(config.training_scene_names)
 else:
-    scene_configs = get_training_scene_configs()
+    scene_configs = [VolcanicAshConfig.from_dict(config.to_dict())]
 
 config.training_scene_names = [scene.scene_name for scene in scene_configs]
 
@@ -44,9 +44,12 @@ print()
 
 trainer = Trainer(
     config=config,
-    num_episodes=300,
-    max_steps_per_episode=300,
+    num_episodes=3000,
+    max_steps_per_episode=400,
     learning_rate=1e-4,
+    buffer_size=300000,
+    batch_size=128,
+    noise_decay=0.999,
     save_dir='models',
     scene_configs=scene_configs
 )
