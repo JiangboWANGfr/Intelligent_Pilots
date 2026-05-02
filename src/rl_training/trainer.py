@@ -63,6 +63,14 @@ class Trainer:
             'critic_losses': [],
             'steps': [],
             'success_rates': [],
+            'success_flags': [],
+            'timeout_flags': [],
+            'danger_violations': [],
+            'max_concentrations': [],
+            'avg_concentrations': [],
+            'fuel_consumptions': [],
+            'final_distances': [],
+            'termination_reasons': [],
             'scene_names': [],
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
@@ -83,12 +91,24 @@ class Trainer:
             current_scene_name = reset_info.get('scene_name', self.env.scene_name)
             episode_reward = 0
             episode_loss_sum = 0
+            episode_actor_loss_sum = 0
+            episode_critic_loss_sum = 0
             loss_count = 0
+            concentrations = [float(reset_info.get('current_concentration', 0.0))]
+            danger_violation = bool(reset_info.get('is_in_danger_zone', False))
+            success = False
+            timeout = False
+            termination_reason = 'max_steps'
+            final_info = reset_info
             
             for step in range(self.max_steps):
                 action = self.agent.select_action(state, self.noise_scale)
                 
                 next_state, reward, terminated, truncated, info = self.env.step(action)
+                final_info = info
+                current_concentration = float(info.get('current_concentration', 0.0))
+                concentrations.append(current_concentration)
+                danger_violation = danger_violation or bool(info.get('is_in_danger_zone', False))
                 
                 done = terminated or truncated
                 
@@ -103,6 +123,8 @@ class Trainer:
                     actor_loss, critic_loss = loss
                     if actor_loss is not None and critic_loss is not None:
                         episode_loss_sum += (actor_loss + critic_loss)
+                        episode_actor_loss_sum += actor_loss
+                        episode_critic_loss_sum += critic_loss
                         loss_count += 1
                 
                 episode_reward += reward
@@ -111,6 +133,15 @@ class Trainer:
                 if done:
                     if terminated and info['distance_to_target'] < self.env.success_threshold:
                         success_count += 1
+                        success = True
+                        termination_reason = 'success'
+                    elif truncated:
+                        timeout = True
+                        termination_reason = 'timeout'
+                    elif current_concentration > 0.9:
+                        termination_reason = 'extreme_concentration'
+                    else:
+                        termination_reason = 'terminated'
                     break
             
             recent_rewards.append(episode_reward)
@@ -123,8 +154,18 @@ class Trainer:
             self.training_history['episodes'].append(episode)
             self.training_history['rewards'].append(episode_reward)
             self.training_history['losses'].append(episode_loss_sum / max(loss_count, 1))
+            self.training_history['actor_losses'].append(episode_actor_loss_sum / max(loss_count, 1))
+            self.training_history['critic_losses'].append(episode_critic_loss_sum / max(loss_count, 1))
             self.training_history['steps'].append(step + 1)
             self.training_history['success_rates'].append(success_rate)
+            self.training_history['success_flags'].append(success)
+            self.training_history['timeout_flags'].append(timeout)
+            self.training_history['danger_violations'].append(danger_violation)
+            self.training_history['max_concentrations'].append(max(concentrations))
+            self.training_history['avg_concentrations'].append(float(np.mean(concentrations)))
+            self.training_history['fuel_consumptions'].append(float(final_info.get('fuel_consumed', 0.0)))
+            self.training_history['final_distances'].append(float(final_info.get('distance_to_target', 0.0)))
+            self.training_history['termination_reasons'].append(termination_reason)
             self.training_history['scene_names'].append(current_scene_name)
             
             if episode % log_interval == 0:
@@ -156,16 +197,22 @@ class Trainer:
     
     def save_training_history(self):
         history_path = os.path.join(self.save_dir, 'training_history.json')
-        
-        serializable_history = {}
-        for key, value in self.training_history.items():
+
+        def make_serializable(value):
             if isinstance(value, list):
-                if value and isinstance(value[0], str):
-                    serializable_history[key] = value
-                else:
-                    serializable_history[key] = [float(v) for v in value]
-            else:
-                serializable_history[key] = value
+                return [make_serializable(item) for item in value]
+            if isinstance(value, (np.integer,)):
+                return int(value)
+            if isinstance(value, (np.floating,)):
+                return float(value)
+            if isinstance(value, (np.bool_,)):
+                return bool(value)
+            return value
+
+        serializable_history = {
+            key: make_serializable(value)
+            for key, value in self.training_history.items()
+        }
         
         with open(history_path, 'w') as f:
             json.dump(serializable_history, f, indent=2)
