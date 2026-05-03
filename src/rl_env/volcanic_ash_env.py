@@ -6,6 +6,7 @@ from typing import Dict, Tuple, Optional, List
 from scipy.ndimage import distance_transform_edt
 from src.model.gmm_model import GMMVolcanicAshModel
 from src.model.irregular_ash_generator import IrregularAshGenerator
+from src.model.random_ash_scene_generator import RandomAshSceneGenerator
 from src.path_planning.fallback_planner import FallbackPlanner
 from src.config.volcanic_ash_config import VolcanicAshConfig
 
@@ -30,6 +31,10 @@ class VolcanicAshEnv(gym.Env):
         self.external_concentration_map = None
         self.scene_map_cache = {}
         self.scene_name = self.config.scene_name or self.config.model_type
+        self.random_scene_generator = None
+        self.random_scene_counter = 0
+        if bool(getattr(self.base_config, 'use_random_ash_scenes', False)):
+            self.random_scene_generator = RandomAshSceneGenerator(self.base_config)
         self.ash_model = GMMVolcanicAshModel(self.config)
         self.concentration_map = self.ash_model.generate_concentration_map()
 
@@ -575,8 +580,21 @@ class VolcanicAshEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.scene_cursor = (self.scene_cursor + 1) % len(self.scene_configs)
-        self.config = deepcopy(self.scene_configs[self.scene_cursor])
+        if self.random_scene_generator is not None:
+            base_seed = getattr(self.base_config, 'random_scene_seed', None)
+            if base_seed is None:
+                scene_seed = int(self.np_random.integers(0, 2**31 - 1))
+            else:
+                scene_seed = int(base_seed) + self.random_scene_counter
+            self.random_scene_counter += 1
+            self.config = self.random_scene_generator.sample_config(
+                seed=scene_seed,
+                rng=np.random.default_rng(scene_seed)
+            )
+            self.scene_cursor = -1
+        else:
+            self.scene_cursor = (self.scene_cursor + 1) % len(self.scene_configs)
+            self.config = deepcopy(self.scene_configs[self.scene_cursor])
         self.scene_name = self.config.scene_name or self.config.model_type
 
         if self.external_concentration_map is not None:

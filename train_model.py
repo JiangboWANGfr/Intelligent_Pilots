@@ -22,6 +22,16 @@ def parse_scene_names(raw: Optional[str]) -> Optional[List[str]]:
     return [name.strip() for name in raw.split(',') if name.strip()]
 
 
+def parse_int_pair(raw: str):
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated integers, e.g. 1,6.')
+    lower, upper = int(parts[0]), int(parts[1])
+    if lower < 1 or upper < lower:
+        raise argparse.ArgumentTypeError('Expected a valid range with 1 <= min <= max.')
+    return lower, upper
+
+
 def load_config(config_path: str, fallback_preset: str) -> VolcanicAshConfig:
     if os.path.exists(config_path):
         config = VolcanicAshConfig.load(config_path)
@@ -40,6 +50,11 @@ def load_config(config_path: str, fallback_preset: str) -> VolcanicAshConfig:
 def build_scene_configs(config: VolcanicAshConfig,
                         scene_names: Optional[List[str]],
                         use_all_scenes: bool) -> List[VolcanicAshConfig]:
+    if bool(getattr(config, 'use_random_ash_scenes', False)):
+        random_config = VolcanicAshConfig.from_dict(config.to_dict())
+        random_config.scene_name = '随机旋转GMM_每回合生成'
+        random_config.model_type = 'random_rotated_gmm'
+        return [random_config]
     if scene_names:
         return get_training_scene_configs(scene_names)
     if config.training_scene_names:
@@ -91,7 +106,8 @@ def safe_filename(name: str) -> str:
 def save_pretraining_ash_images(config: VolcanicAshConfig,
                                 scene_configs: List[VolcanicAshConfig],
                                 save_dir: str,
-                                seed: int = 2026) -> None:
+                                seed: int = 2026,
+                                preview_count: Optional[int] = None) -> None:
     preview_dir = os.path.join(save_dir, 'pre_training_ash_maps')
     os.makedirs(preview_dir, exist_ok=True)
 
@@ -99,7 +115,8 @@ def save_pretraining_ash_images(config: VolcanicAshConfig,
     preview_env.max_steps = 1
     summary = []
 
-    for index, scene_config in enumerate(scene_configs):
+    count = preview_count or len(scene_configs)
+    for index in range(count):
         _, info = preview_env.reset(seed=seed + index)
         scene_name = info.get('scene_name', preview_env.scene_name)
         filename_prefix = f'{index + 1:02d}_{safe_filename(scene_name)}'
@@ -172,6 +189,16 @@ def main():
                         help='Comma-separated preset scene names. Overrides config.training_scene_names.')
     parser.add_argument('--all-scenes', action='store_true',
                         help='Train on all preset scenes when no explicit scenes are provided.')
+    parser.add_argument('--random-ash-scenes', action='store_true',
+                        help='Generate a new random 1-6 center rotated-GMM ash scene each episode.')
+    parser.add_argument('--random-scene-seed', type=int, default=None,
+                        help='Base seed metadata for random ash scenes.')
+    parser.add_argument('--random-centers-range', type=parse_int_pair, default=(1, 6),
+                        help='Random Gaussian center count range as min,max.')
+    parser.add_argument('--random-preview-scenes', type=int, default=6,
+                        help='Number of random ash previews saved before random-scene training.')
+    parser.add_argument('--random-scene-max-attempts', type=int, default=None,
+                        help='Rejection-sampling attempts per random ash scene.')
     parser.add_argument('--episodes', type=int, default=3000)
     parser.add_argument('--max-steps', type=int, default=400)
     parser.add_argument('--algorithm', choices=['td3', 'ddpg'], default='td3')
@@ -237,9 +264,17 @@ def main():
     print()
 
     config = load_config(args.config, args.fallback_preset)
+    if args.random_ash_scenes:
+        config.use_random_ash_scenes = True
+        config.random_scene_seed = args.random_scene_seed
+        config.random_scene_min_centers = args.random_centers_range[0]
+        config.random_scene_max_centers = args.random_centers_range[1]
+        if args.random_scene_max_attempts is not None:
+            config.random_scene_max_attempts = args.random_scene_max_attempts
+        config.training_scene_names = []
     scene_configs = build_scene_configs(
         config,
-        scene_names=parse_scene_names(args.scenes),
+        scene_names=None if args.random_ash_scenes else parse_scene_names(args.scenes),
         use_all_scenes=args.all_scenes
     )
     apply_aircraft_runtime_config(
@@ -253,6 +288,12 @@ def main():
 
     print(f'Volcanic Ash Model: {config.model_type}')
     print(f'  Centers: {len(config.centers)}')
+    print(f'  Random ash scenes: {config.use_random_ash_scenes}')
+    if config.use_random_ash_scenes:
+        print(
+            '  Random centers per episode: '
+            f'{config.random_scene_min_centers}-{config.random_scene_max_centers}'
+        )
     print(f'  Cloud size: {config.cloud_size}')
     print(f'  Threshold: {config.concentration_threshold}')
     print(f'  Geo position: ({config.geo_center_lat}, {config.geo_center_lon})')
@@ -269,7 +310,12 @@ def main():
     print()
 
     if not args.skip_pretraining_ash_images:
-        save_pretraining_ash_images(config, scene_configs, args.save_dir)
+        save_pretraining_ash_images(
+            config,
+            scene_configs,
+            args.save_dir,
+            preview_count=args.random_preview_scenes if config.use_random_ash_scenes else None
+        )
         print()
 
     trainer = Trainer(

@@ -64,6 +64,26 @@ class VolcanicAshConfig:
     num_filaments: int = 5  # 细丝数量
     random_seed: Optional[int] = None  # 随机种子，用于可重复生成
     randomize_irregular_each_episode: bool = True
+    use_random_ash_scenes: bool = False
+    random_scene_seed: Optional[int] = None
+    random_scene_min_centers: int = 1
+    random_scene_max_centers: int = 6
+    random_scene_position_margin: float = 90.0
+    random_scene_min_std: float = 18.0
+    random_scene_max_std: float = 48.0
+    random_scene_min_anisotropy: float = 1.4
+    random_scene_max_anisotropy: float = 3.6
+    random_scene_min_weight: float = 0.25
+    random_scene_max_weight: float = 1.0
+    random_scene_cloud_size_min: float = 62.0
+    random_scene_cloud_size_max: float = 84.0
+    random_scene_threshold_min: float = 0.28
+    random_scene_threshold_max: float = 0.34
+    random_scene_min_medium_area: float = 2.0
+    random_scene_max_medium_area: float = 24.0
+    random_scene_max_low_area: float = 48.0
+    random_scene_max_high_area: float = 12.0
+    random_scene_max_attempts: int = 8
     
     def __post_init__(self):
         if self.centers is None:
@@ -110,7 +130,27 @@ class VolcanicAshConfig:
             'add_filaments': self.add_filaments,
             'num_filaments': self.num_filaments,
             'random_seed': self.random_seed,
-            'randomize_irregular_each_episode': self.randomize_irregular_each_episode
+            'randomize_irregular_each_episode': self.randomize_irregular_each_episode,
+            'use_random_ash_scenes': self.use_random_ash_scenes,
+            'random_scene_seed': self.random_scene_seed,
+            'random_scene_min_centers': self.random_scene_min_centers,
+            'random_scene_max_centers': self.random_scene_max_centers,
+            'random_scene_position_margin': self.random_scene_position_margin,
+            'random_scene_min_std': self.random_scene_min_std,
+            'random_scene_max_std': self.random_scene_max_std,
+            'random_scene_min_anisotropy': self.random_scene_min_anisotropy,
+            'random_scene_max_anisotropy': self.random_scene_max_anisotropy,
+            'random_scene_min_weight': self.random_scene_min_weight,
+            'random_scene_max_weight': self.random_scene_max_weight,
+            'random_scene_cloud_size_min': self.random_scene_cloud_size_min,
+            'random_scene_cloud_size_max': self.random_scene_cloud_size_max,
+            'random_scene_threshold_min': self.random_scene_threshold_min,
+            'random_scene_threshold_max': self.random_scene_threshold_max,
+            'random_scene_min_medium_area': self.random_scene_min_medium_area,
+            'random_scene_max_medium_area': self.random_scene_max_medium_area,
+            'random_scene_max_low_area': self.random_scene_max_low_area,
+            'random_scene_max_high_area': self.random_scene_max_high_area,
+            'random_scene_max_attempts': self.random_scene_max_attempts
         }
     
     @classmethod

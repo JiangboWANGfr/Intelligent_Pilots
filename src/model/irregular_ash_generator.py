@@ -22,8 +22,35 @@ class IrregularAshGenerator:
         if seed is not None:
             np.random.seed(seed)
         self.seed = seed or np.random.randint(0, 10000)
+        self.rng = np.random.default_rng(self.seed)
         self.perlin = PerlinNoise(self.seed)
         self.simplex = SimplexNoise(self.seed)
+
+    def generate_fast_noise(self,
+                            shape: Tuple[int, int],
+                            scale: float = 80.0,
+                            octaves: int = 3) -> np.ndarray:
+        """Generate smooth procedural noise using resized random grids."""
+        height, width = shape
+        result = np.zeros((height, width), dtype=np.float32)
+        amplitude = 1.0
+        amplitude_sum = 0.0
+
+        for octave in range(max(1, octaves)):
+            octave_scale = max(4.0, scale / (2 ** octave))
+            low_h = max(2, int(np.ceil(height / octave_scale)) + 1)
+            low_w = max(2, int(np.ceil(width / octave_scale)) + 1)
+            coarse = self.rng.random((low_h, low_w), dtype=np.float32)
+            resized = cv2.resize(coarse, (width, height), interpolation=cv2.INTER_CUBIC)
+            result += resized * amplitude
+            amplitude_sum += amplitude
+            amplitude *= 0.5
+
+        result /= max(amplitude_sum, 1e-6)
+        result = gaussian_filter(result, sigma=max(0.6, scale / 90.0))
+        min_value = float(np.min(result))
+        max_value = float(np.max(result))
+        return (result - min_value) / max(max_value - min_value, 1e-6)
 
     def generate_perlin_noise(self,
                              shape: Tuple[int, int],
@@ -93,12 +120,12 @@ class IrregularAshGenerator:
         height, width = field.shape
 
         # 生成两个方向的噪声场作为位移场
-        noise_x = self.generate_perlin_noise(
+        noise_x = self.generate_fast_noise(
             (height, width),
             scale=noise_scale,
             octaves=octaves
         )
-        noise_y = self.generate_perlin_noise(
+        noise_y = self.generate_fast_noise(
             (height, width),
             scale=noise_scale,
             octaves=octaves
@@ -169,7 +196,7 @@ class IrregularAshGenerator:
 
         # 如果使用湍流风场，添加噪声扰动
         if turbulent_wind:
-            noise_field = self.generate_perlin_noise((height, width), scale=80.0, octaves=3)
+            noise_field = self.generate_fast_noise((height, width), scale=80.0, octaves=3)
             wind_turbulence = (noise_field - 0.5) * 0.5  # [-0.25, 0.25]
             distance_factor = distance_factor * (1 + wind_turbulence)
 
@@ -213,7 +240,7 @@ class IrregularAshGenerator:
 
         for _ in range(iterations):
             # 生成噪声
-            noise = self.generate_perlin_noise(
+            noise = self.generate_fast_noise(
                 field.shape,
                 scale=30.0 / (fractal_dimension),
                 octaves=int(fractal_dimension * 3)
@@ -257,41 +284,37 @@ class IrregularAshGenerator:
         if len(high_conc_coords) == 0:
             return result
 
+        filament_mask = np.zeros((height, width), dtype=np.float32)
         for _ in range(num_filaments):
-            # 随机选择起点
-            start_idx = np.random.randint(0, len(high_conc_coords))
-            y, x = high_conc_coords[start_idx]
-
-            # 生成随机方向和长度
-            angle = np.random.uniform(0, 2 * np.pi)
-            length = np.random.uniform(min(width, height) * 0.1, min(width, height) * 0.3)
-
-            # 生成细丝路径（贝塞尔曲线或随机游走）
-            num_points = int(length)
+            start_idx = int(self.rng.integers(0, len(high_conc_coords)))
+            y, x = high_conc_coords[start_idx].astype(float)
+            angle = float(self.rng.uniform(0, 2 * np.pi))
+            length = float(self.rng.uniform(min(width, height) * 0.1, min(width, height) * 0.3))
+            num_points = max(6, int(length / 8.0))
             points = []
             current_angle = angle
 
-            for i in range(num_points):
-                # 添加角度扰动
-                current_angle += np.random.normal(0, 0.2)
+            for _point_index in range(num_points):
+                current_angle += float(self.rng.normal(0.0, 0.22))
+                step = length / num_points
+                x += np.cos(current_angle) * step
+                y += np.sin(current_angle) * step
+                if 0 <= x < width and 0 <= y < height:
+                    points.append([int(round(x)), int(round(y))])
 
-                x += np.cos(current_angle)
-                y += np.sin(current_angle)
+            if len(points) >= 2:
+                cv2.polylines(
+                    filament_mask,
+                    [np.asarray(points, dtype=np.int32)],
+                    isClosed=False,
+                    color=float(filament_strength),
+                    thickness=max(1, int(round(filament_width * 2))),
+                    lineType=cv2.LINE_AA
+                )
 
-                if 0 <= int(x) < width and 0 <= int(y) < height:
-                    points.append((int(y), int(x)))
-
-            # 在路径上绘制细丝
-            for py, px in points:
-                # 使用高斯分布创建细丝
-                for dy in range(-int(filament_width * 2), int(filament_width * 2) + 1):
-                    for dx in range(-int(filament_width * 2), int(filament_width * 2) + 1):
-                        ny, nx = py + dy, px + dx
-                        if 0 <= ny < height and 0 <= nx < width:
-                            distance = np.sqrt(dx**2 + dy**2)
-                            if distance <= filament_width * 2:
-                                contribution = filament_strength * np.exp(-distance**2 / (2 * filament_width**2))
-                                result[ny, nx] = min(1.0, result[ny, nx] + contribution)
+        if np.any(filament_mask > 0):
+            filament_mask = gaussian_filter(filament_mask, sigma=max(0.8, filament_width))
+            result = np.clip(result + filament_mask, 0.0, 1.0)
 
         return result
 
