@@ -129,6 +129,16 @@ def safe_name(value: str) -> str:
     return sanitized.strip('_') or 'scene'
 
 
+def parse_int_pair(raw: str) -> Tuple[int, int]:
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated integers, e.g. 1,6.')
+    lower, upper = int(parts[0]), int(parts[1])
+    if lower < 1 or upper < lower:
+        raise argparse.ArgumentTypeError('Expected a valid range with 1 <= min <= max.')
+    return lower, upper
+
+
 def find_milestone_checkpoints(model_dir: str,
                                max_checkpoints: int,
                                include_final: bool) -> List[Tuple[str, str]]:
@@ -218,9 +228,22 @@ def export_checkpoint_animations(model_dir: str,
                                  seed: int,
                                  max_steps: int,
                                  max_checkpoints: int,
-                                 include_untrained: bool) -> List[Dict]:
+                                 include_untrained: bool,
+                                 random_ash_scenes: bool = False,
+                                 random_centers_range: Tuple[int, int] = (1, 6),
+                                 random_scene_seed: Optional[int] = None) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
-    scene_configs = get_training_scene_configs(parse_scene_names(scene_name))
+    if random_ash_scenes:
+        config.use_random_ash_scenes = True
+        config.random_scene_seed = seed if random_scene_seed is None else random_scene_seed
+        config.random_scene_min_centers = random_centers_range[0]
+        config.random_scene_max_centers = random_centers_range[1]
+        config.scene_name = scene_name
+        config.model_type = 'random_rotated_gmm'
+        config.training_scene_names = []
+        scene_configs = [VolcanicAshConfig.from_dict(config.to_dict())]
+    else:
+        scene_configs = get_training_scene_configs(parse_scene_names(scene_name))
     apply_aircraft_runtime_config(
         config,
         scene_configs,
@@ -234,6 +257,8 @@ def export_checkpoint_animations(model_dir: str,
     state_dim = len(DDPGAgent.flatten_state(obs))
     action_dim = int(np.prod(env.action_space.shape))
     env.scene_cursor = -1
+    if hasattr(env, 'random_scene_counter'):
+        env.random_scene_counter = 0
 
     milestones = []
     if include_untrained:
@@ -255,6 +280,8 @@ def export_checkpoint_animations(model_dir: str,
             continue
 
         env.scene_cursor = -1
+        if hasattr(env, 'random_scene_counter'):
+            env.random_scene_counter = 0
         path_result = simulate_episode(
             env=env,
             agent=agent,
@@ -301,6 +328,14 @@ def main():
     parser.add_argument('--output-dir', default='output/demo_assets')
     parser.add_argument('--cruise-speed', type=float, default=9.0)
     parser.add_argument('--fixed-scene-maps', action='store_true')
+    parser.add_argument('--random-ash-scenes', action='store_true',
+                        help='Render checkpoint animations on generated random rotated-GMM ash scenes.')
+    parser.add_argument('--random-centers-range', type=parse_int_pair, default=(1, 6),
+                        help='Random Gaussian center count range as min,max.')
+    parser.add_argument('--random-demo-scenes', type=int, default=1,
+                        help='Number of deterministic random scenes to render.')
+    parser.add_argument('--random-scene-seed', type=int, default=None,
+                        help='Base seed for deterministic random demo scenes.')
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--max-steps', type=int, default=260)
     parser.add_argument('--max-checkpoints', type=int, default=4)
@@ -315,6 +350,9 @@ def main():
         'model_dir': args.model_dir,
         'config': args.config,
         'scene': args.scene,
+        'random_ash_scenes': args.random_ash_scenes,
+        'random_centers_range': list(args.random_centers_range),
+        'random_demo_scenes': args.random_demo_scenes,
         'metric_plots': [],
         'animations': []
     }
@@ -329,8 +367,16 @@ def main():
         )
 
     if not args.skip_animations:
-        scene_names = parse_scene_names(args.scene) or [args.scene]
-        for scene_name in scene_names:
+        if args.random_ash_scenes:
+            base_seed = args.seed if args.random_scene_seed is None else args.random_scene_seed
+            scene_names = [
+                f'随机旋转GMM_演示场景_{index + 1:02d}_seed{base_seed + index}'
+                for index in range(max(1, args.random_demo_scenes))
+            ]
+        else:
+            scene_names = parse_scene_names(args.scene) or [args.scene]
+        summary['scene'] = scene_names if args.random_ash_scenes else args.scene
+        for scene_index, scene_name in enumerate(scene_names):
             summary['animations'].extend(export_checkpoint_animations(
                 model_dir=args.model_dir,
                 output_dir=args.output_dir,
@@ -341,7 +387,14 @@ def main():
                 seed=args.seed,
                 max_steps=args.max_steps,
                 max_checkpoints=args.max_checkpoints,
-                include_untrained=args.include_untrained
+                include_untrained=args.include_untrained,
+                random_ash_scenes=args.random_ash_scenes,
+                random_centers_range=args.random_centers_range,
+                random_scene_seed=(
+                    (args.random_scene_seed if args.random_scene_seed is not None else args.seed)
+                    + scene_index
+                    if args.random_ash_scenes else None
+                )
             ))
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
