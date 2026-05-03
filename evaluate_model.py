@@ -29,19 +29,28 @@ def build_scene_configs(config: VolcanicAshConfig,
 def apply_aircraft_runtime_config(config: VolcanicAshConfig,
                                   scene_configs: List[VolcanicAshConfig],
                                   cruise_speed: Optional[float],
-                                  cruise_speed_mode: str) -> None:
+                                  cruise_speed_mode: str,
+                                  fixed_scene_maps: bool) -> None:
     if cruise_speed is not None:
         config.fixed_cruise_speed = cruise_speed
     config.cruise_speed_mode = cruise_speed_mode
+    if fixed_scene_maps:
+        config.randomize_irregular_each_episode = False
 
     for scene in scene_configs:
         scene.fixed_cruise_speed = config.fixed_cruise_speed
         scene.min_cruise_speed = config.min_cruise_speed
         scene.max_cruise_speed = config.max_cruise_speed
         scene.cruise_speed_mode = config.cruise_speed_mode
+        scene.randomize_irregular_each_episode = config.randomize_irregular_each_episode
         scene.path_corridor_radius = config.path_corridor_radius
         scene.path_lookahead_distance = config.path_lookahead_distance
         scene.reference_path_points = config.reference_path_points
+        scene.path_planning_threshold_ratio = config.path_planning_threshold_ratio
+        scene.path_risk_inflation_radius = config.path_risk_inflation_radius
+        scene.path_boundary_margin = config.path_boundary_margin
+        scene.ash_avoidance_gain = config.ash_avoidance_gain
+        scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
 
 
 def infer_algorithm(model_path: str, requested: str) -> str:
@@ -156,6 +165,8 @@ def main():
                         help='Fixed per-step cruise speed used during evaluation.')
     parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
                         help='fixed uses --cruise-speed/config speed; random samples once per episode.')
+    parser.add_argument('--fixed-scene-maps', action='store_true',
+                        help='Reuse one deterministic ash map per scene instead of randomizing irregular maps every episode.')
     parser.add_argument('--output', default='output/evaluation_results.json',
                         help='Where to write detailed JSON results.')
     args = parser.parse_args()
@@ -171,7 +182,8 @@ def main():
         config,
         scene_configs,
         cruise_speed=args.cruise_speed,
-        cruise_speed_mode=args.cruise_speed_mode
+        cruise_speed_mode=args.cruise_speed_mode,
+        fixed_scene_maps=args.fixed_scene_maps
     )
     env = VolcanicAshEnv(config, scene_configs=scene_configs)
     env.max_steps = args.max_steps
@@ -198,6 +210,7 @@ def main():
         'config_path': args.config,
         'fixed_cruise_speed': config.fixed_cruise_speed,
         'cruise_speed_mode': config.cruise_speed_mode,
+        'randomize_irregular_each_episode': config.randomize_irregular_each_episode,
         'scene_names': [scene.scene_name or scene.model_type for scene in scene_configs],
         'seed': args.seed,
         'max_steps': args.max_steps,

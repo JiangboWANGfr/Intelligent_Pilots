@@ -159,6 +159,8 @@ class DDPGAgent:
         state_list.extend(state_dict['current_concentration'])
         state_list.extend(state_dict['forward_concentration'])
         state_list.extend(state_dict['lookahead_vector'])
+        state_list.extend(state_dict['lookahead_heading_error'])
+        state_list.extend(state_dict['reference_turn_cmd'])
         state_list.extend(state_dict['cross_track_error'])
         state_list.extend(state_dict['path_progress_ratio'])
         return np.array(state_list, dtype=np.float32)

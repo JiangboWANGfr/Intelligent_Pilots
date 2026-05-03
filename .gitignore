@@ -3,3 +3,5 @@ __pycache__/
 *.png
 *.jpg
 output/
+*.pth
+models/*/

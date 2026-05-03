@@ -2,6 +2,7 @@ import heapq
 from typing import List, Optional, Tuple
 
 import numpy as np
+from scipy.ndimage import maximum_filter
 
 from src.config.volcanic_ash_config import VolcanicAshConfig
 
@@ -16,6 +17,8 @@ class FallbackPlanner:
              start_pos: Tuple[float, float],
              target_pos: Tuple[float, float],
              max_concentration: Optional[float] = None,
+             risk_inflation_radius: Optional[float] = None,
+             boundary_margin: Optional[float] = None,
              desired_points: int = 160) -> List[Tuple[float, float]]:
         map_array = np.asarray(concentration_map, dtype=np.float32)
         if map_array.ndim != 2:
@@ -25,10 +28,20 @@ class FallbackPlanner:
                           else self.config.concentration_threshold)
         stride = self.grid_stride or max(4, min(map_array.shape) // 96)
         coarse_map = self._build_coarse_map(map_array, stride)
+        planning_map = self._inflate_risk_map(map_array, risk_inflation_radius)
+        clearance_map = self._build_coarse_map(planning_map, stride)
+        boundary_margin_cells = float(boundary_margin or 0.0) / max(stride, 1)
         start_node = self._to_grid(start_pos, stride, coarse_map.shape)
         target_node = self._to_grid(target_pos, stride, coarse_map.shape)
 
-        coarse_path = self._astar(coarse_map, start_node, target_node, threshold)
+        coarse_path = self._astar(
+            coarse_map,
+            clearance_map,
+            start_node,
+            target_node,
+            threshold,
+            boundary_margin_cells
+        )
         if not coarse_path:
             return self._smooth_path(
                 self._interpolate_path([start_pos, target_pos], desired_points, map_array.shape),
@@ -42,6 +55,16 @@ class FallbackPlanner:
 
         interpolated = self._interpolate_path(fine_path, desired_points, map_array.shape)
         return self._smooth_path(interpolated, map_array.shape)
+
+    def _inflate_risk_map(self,
+                          concentration_map: np.ndarray,
+                          risk_inflation_radius: Optional[float]) -> np.ndarray:
+        radius = int(round(float(risk_inflation_radius or 0.0)))
+        if radius <= 0:
+            return concentration_map
+
+        kernel_size = max(1, 2 * radius + 1)
+        return maximum_filter(concentration_map, size=kernel_size, mode='nearest')
 
     def summarize_path(self,
                        concentration_map: np.ndarray,
@@ -85,9 +108,11 @@ class FallbackPlanner:
 
     def _astar(self,
                coarse_map: np.ndarray,
+               clearance_map: np.ndarray,
                start_node: Tuple[int, int],
                target_node: Tuple[int, int],
-               threshold: float) -> List[Tuple[int, int]]:
+               threshold: float,
+               boundary_margin_cells: float = 0.0) -> List[Tuple[int, int]]:
         neighbors = [
             (-1, -1), (-1, 0), (-1, 1),
             (0, -1),           (0, 1),
@@ -109,10 +134,42 @@ class FallbackPlanner:
                     continue
 
                 risk = float(coarse_map[next_node])
+                clearance_risk = max(risk, float(clearance_map[next_node]))
                 movement_cost = float(np.hypot(dy, dx))
-                risk_penalty = 1.0 + 8.0 * risk + 28.0 * max(0.0, risk - threshold) ** 2
+                safe_threshold = max(threshold, 1e-6)
+                risk_ratio = risk / safe_threshold
+                clearance_ratio = clearance_risk / safe_threshold
+                excess_ratio = max(0.0, risk - threshold) / safe_threshold
+                clearance_excess_ratio = max(0.0, clearance_risk - threshold) / safe_threshold
+                risk_penalty = (
+                    1.0
+                    + 6.0 * risk
+                    + 3.0 * risk_ratio ** 2
+                    + 2.0 * clearance_ratio ** 2
+                )
+                if clearance_risk > threshold:
+                    risk_penalty += (
+                        20.0 * clearance_excess_ratio
+                        + 60.0 * clearance_excess_ratio ** 2
+                    )
+                if risk > threshold:
+                    risk_penalty += 120.0 * excess_ratio + 600.0 * excess_ratio ** 2
+                if risk > threshold * 1.5:
+                    risk_penalty += 2000.0
+                if risk > threshold * 2.0:
+                    risk_penalty += 8000.0
                 if risk > 0.95:
-                    risk_penalty += 120.0
+                    risk_penalty += 20000.0
+                if boundary_margin_cells > 0.0:
+                    edge_distance = min(
+                        next_node[0],
+                        next_node[1],
+                        coarse_map.shape[0] - 1 - next_node[0],
+                        coarse_map.shape[1] - 1 - next_node[1]
+                    )
+                    if edge_distance < boundary_margin_cells:
+                        edge_ratio = (boundary_margin_cells - edge_distance) / boundary_margin_cells
+                        risk_penalty += 20.0 * edge_ratio + 80.0 * edge_ratio ** 2
 
                 new_cost = cost_so_far[current] + movement_cost * risk_penalty
                 if next_node not in cost_so_far or new_cost < cost_so_far[next_node]:

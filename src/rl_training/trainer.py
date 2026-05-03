@@ -30,6 +30,12 @@ class Trainer:
                  noise_clip: float = 0.5,
                  policy_delay: int = 2,
                  device: str = 'auto',
+                 initial_noise: float = 0.3,
+                 expert_warmup_episodes: int = 0,
+                 behavior_clone_steps: int = 0,
+                 bc_regularization_steps: int = 0,
+                 expert_gain: float = 1.0,
+                 imitation_only: bool = False,
                  scene_configs: Optional[List[VolcanicAshConfig]] = None):
         
         self.config = config
@@ -40,6 +46,14 @@ class Trainer:
         self.noise_decay = noise_decay
         self.min_noise = min_noise
         self.algorithm = algorithm.lower()
+        self.initial_noise = initial_noise
+        self.expert_warmup_episodes = expert_warmup_episodes
+        self.behavior_clone_steps = behavior_clone_steps
+        self.bc_regularization_steps = bc_regularization_steps
+        self.expert_gain = expert_gain
+        self.imitation_only = imitation_only
+        self.expert_states = None
+        self.expert_actions = None
         
         os.makedirs(save_dir, exist_ok=True)
         
@@ -64,7 +78,7 @@ class Trainer:
             device=device
         )
         
-        self.noise_scale = 0.3
+        self.noise_scale = initial_noise
         
         self.training_history = {
             'episodes': [],
@@ -88,6 +102,12 @@ class Trainer:
             'scene_names': [],
             'algorithm': self.algorithm,
             'device': str(self.agent.device),
+            'initial_noise': self.initial_noise,
+            'expert_warmup_episodes': self.expert_warmup_episodes,
+            'behavior_clone_steps': self.behavior_clone_steps,
+            'bc_regularization_steps': self.bc_regularization_steps,
+            'expert_gain': self.expert_gain,
+            'imitation_only': self.imitation_only,
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
     
@@ -95,8 +115,88 @@ class Trainer:
         obs = self.env.reset()[0]
         flat_state = DDPGAgent.flatten_state(obs)
         return len(flat_state)
+
+    def _collect_expert_transitions(self) -> Tuple[np.ndarray, np.ndarray]:
+        expert_states = []
+        expert_actions = []
+
+        for _ in range(self.expert_warmup_episodes):
+            state, _ = self.env.reset()
+            for _step in range(self.max_steps):
+                flat_state = DDPGAgent.flatten_state(state)
+                action = np.array([
+                    self.env.get_reference_turn_command(gain=self.expert_gain)
+                ], dtype=np.float32)
+
+                next_state, reward, terminated, truncated, _info = self.env.step(action)
+                flat_next_state = DDPGAgent.flatten_state(next_state)
+                done = terminated or truncated
+
+                self.agent.replay_buffer.push(
+                    flat_state,
+                    action,
+                    reward,
+                    flat_next_state,
+                    done
+                )
+                expert_states.append(flat_state)
+                expert_actions.append(action)
+                state = next_state
+
+                if done:
+                    break
+
+        if not expert_states:
+            return np.empty((0, self.agent.state_dim), dtype=np.float32), \
+                np.empty((0, self.agent.action_dim), dtype=np.float32)
+
+        return (
+            np.asarray(expert_states, dtype=np.float32),
+            np.asarray(expert_actions, dtype=np.float32)
+        )
+
+    def _behavior_clone_actor(self,
+                              expert_states: np.ndarray,
+                              expert_actions: np.ndarray,
+                              steps: Optional[int] = None):
+        clone_steps = self.behavior_clone_steps if steps is None else steps
+        if clone_steps <= 0 or len(expert_states) == 0:
+            return
+
+        batch_size = min(self.agent.batch_size, len(expert_states))
+        states = torch.as_tensor(expert_states, dtype=torch.float32, device=self.agent.device)
+        actions = torch.as_tensor(expert_actions, dtype=torch.float32, device=self.agent.device)
+
+        self.agent.actor.train()
+        for _ in range(clone_steps):
+            indices = torch.randint(0, len(states), (batch_size,), device=self.agent.device)
+            predicted_actions = self.agent.actor(states[indices])
+            bc_loss = torch.nn.functional.mse_loss(predicted_actions, actions[indices])
+
+            self.agent.actor_optimizer.zero_grad()
+            bc_loss.backward()
+            self.agent.actor_optimizer.step()
+
+        DDPGAgent.hard_update(self.agent.actor_target, self.agent.actor)
     
     def train(self, update_every: int = 10, log_interval: int = 10):
+        if self.expert_warmup_episodes > 0:
+            self.expert_states, self.expert_actions = self._collect_expert_transitions()
+            self._behavior_clone_actor(self.expert_states, self.expert_actions)
+            print(
+                f"Expert warmup collected {len(self.expert_states)} transitions; "
+                f"replay buffer size: {len(self.agent.replay_buffer)}"
+            )
+
+        if self.imitation_only or self.num_episodes <= 0:
+            final_model_path = os.path.join(self.save_dir, 'final_model.pth')
+            self.agent.save_model(final_model_path)
+            self.save_training_history()
+            self.plot_training_curves()
+            print("\nImitation training completed!")
+            print(f"Final model saved to: {final_model_path}")
+            return self.agent, self.training_history
+
         success_count = 0
         recent_rewards = deque(maxlen=100)
         
@@ -201,6 +301,13 @@ class Trainer:
                     'Success': f'{success_rate:.1f}%',
                     'Scene': current_scene_name
                 })
+
+            if self.bc_regularization_steps > 0 and self.expert_states is not None:
+                self._behavior_clone_actor(
+                    self.expert_states,
+                    self.expert_actions,
+                    steps=self.bc_regularization_steps
+                )
             
             if (episode + 1) % 100 == 0:
                 self.save_checkpoint(episode + 1)

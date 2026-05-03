@@ -42,6 +42,11 @@ class VolcanicAshConfig:
     path_corridor_radius: float = 30.0
     path_lookahead_distance: float = 45.0
     reference_path_points: int = 160
+    path_planning_threshold_ratio: float = 0.8
+    path_risk_inflation_radius: float = 8.0
+    path_boundary_margin: float = 45.0
+    ash_avoidance_gain: float = 0.0
+    ash_avoidance_activation_ratio: float = 0.6
     centers: List[Dict] = None
     scene_name: str = ""
     training_scene_names: List[str] = None
@@ -56,6 +61,7 @@ class VolcanicAshConfig:
     add_filaments: bool = True  # 是否添加细丝结构
     num_filaments: int = 5  # 细丝数量
     random_seed: Optional[int] = None  # 随机种子，用于可重复生成
+    randomize_irregular_each_episode: bool = True
     
     def __post_init__(self):
         if self.centers is None:
@@ -83,6 +89,11 @@ class VolcanicAshConfig:
             'path_corridor_radius': self.path_corridor_radius,
             'path_lookahead_distance': self.path_lookahead_distance,
             'reference_path_points': self.reference_path_points,
+            'path_planning_threshold_ratio': self.path_planning_threshold_ratio,
+            'path_risk_inflation_radius': self.path_risk_inflation_radius,
+            'path_boundary_margin': self.path_boundary_margin,
+            'ash_avoidance_gain': self.ash_avoidance_gain,
+            'ash_avoidance_activation_ratio': self.ash_avoidance_activation_ratio,
             'centers': self.centers,
             'scene_name': self.scene_name,
             'training_scene_names': self.training_scene_names,
@@ -94,7 +105,8 @@ class VolcanicAshConfig:
             'fractal_dimension': self.fractal_dimension,
             'add_filaments': self.add_filaments,
             'num_filaments': self.num_filaments,
-            'random_seed': self.random_seed
+            'random_seed': self.random_seed,
+            'randomize_irregular_each_episode': self.randomize_irregular_each_episode
         }
     
     @classmethod

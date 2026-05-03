@@ -69,23 +69,31 @@ def train_stage(stage: Dict,
                 max_steps: int,
                 cruise_speed: Optional[float],
                 cruise_speed_mode: str,
+                fixed_scene_maps: bool,
                 learning_rate: float,
                 batch_size: int,
                 buffer_size: int,
                 noise_decay: float,
                 min_noise: float,
+                initial_noise: float,
                 algorithm: str,
                 policy_noise: float,
                 noise_clip: float,
                 policy_delay: int,
                 update_every: int,
                 device: str,
+                expert_warmup_episodes: int,
+                behavior_clone_steps: int,
+                bc_regularization_steps: int,
+                expert_gain: float,
                 load_model: Optional[str] = None,
                 episodes_override: Optional[int] = None) -> str:
     base_config = load_base_config(config_path)
     if cruise_speed is not None:
         base_config.fixed_cruise_speed = cruise_speed
     base_config.cruise_speed_mode = cruise_speed_mode
+    if fixed_scene_maps:
+        base_config.randomize_irregular_each_episode = False
 
     scene_configs = get_training_scene_configs(stage['scenes'])
     for scene in scene_configs:
@@ -93,9 +101,15 @@ def train_stage(stage: Dict,
         scene.min_cruise_speed = base_config.min_cruise_speed
         scene.max_cruise_speed = base_config.max_cruise_speed
         scene.cruise_speed_mode = base_config.cruise_speed_mode
+        scene.randomize_irregular_each_episode = base_config.randomize_irregular_each_episode
         scene.path_corridor_radius = base_config.path_corridor_radius
         scene.path_lookahead_distance = base_config.path_lookahead_distance
         scene.reference_path_points = base_config.reference_path_points
+        scene.path_planning_threshold_ratio = base_config.path_planning_threshold_ratio
+        scene.path_risk_inflation_radius = base_config.path_risk_inflation_radius
+        scene.path_boundary_margin = base_config.path_boundary_margin
+        scene.ash_avoidance_gain = base_config.ash_avoidance_gain
+        scene.ash_avoidance_activation_ratio = base_config.ash_avoidance_activation_ratio
 
     stage_config = VolcanicAshConfig.from_dict(scene_configs[0].to_dict())
     stage_config.geo_center_lat = base_config.geo_center_lat
@@ -112,6 +126,11 @@ def train_stage(stage: Dict,
     print(f"Algorithm: {algorithm.upper()}")
     print(f"Episodes: {episodes}")
     print(f"Cruise speed: {stage_config.fixed_cruise_speed} ({stage_config.cruise_speed_mode})")
+    print(f"Randomize irregular maps: {stage_config.randomize_irregular_each_episode}")
+    print(f"Path planning threshold ratio: {stage_config.path_planning_threshold_ratio}")
+    print(f"Path risk inflation radius: {stage_config.path_risk_inflation_radius}")
+    print(f"Path boundary margin: {stage_config.path_boundary_margin}")
+    print(f"Ash avoidance gain: {stage_config.ash_avoidance_gain}")
     print(f"Scenes: {', '.join(stage['scenes'])}")
     print(f"Save dir: {save_dir}")
     print('=' * 80)
@@ -125,10 +144,15 @@ def train_stage(stage: Dict,
         batch_size=batch_size,
         noise_decay=noise_decay,
         min_noise=min_noise,
+        initial_noise=initial_noise,
         algorithm=algorithm,
         policy_noise=policy_noise,
         noise_clip=noise_clip,
         policy_delay=policy_delay,
+        expert_warmup_episodes=expert_warmup_episodes,
+        behavior_clone_steps=behavior_clone_steps,
+        bc_regularization_steps=bc_regularization_steps,
+        expert_gain=expert_gain,
         device=device,
         save_dir=save_dir,
         scene_configs=scene_configs
@@ -162,6 +186,7 @@ def main():
     parser.add_argument('--buffer-size', type=int, default=300000)
     parser.add_argument('--noise-decay', type=float, default=0.999)
     parser.add_argument('--min-noise', type=float, default=0.05)
+    parser.add_argument('--initial-noise', type=float, default=0.3)
     parser.add_argument('--policy-noise', type=float, default=0.2)
     parser.add_argument('--noise-clip', type=float, default=0.5)
     parser.add_argument('--policy-delay', type=int, default=2)
@@ -171,6 +196,12 @@ def main():
                         help='Fixed per-step cruise speed for every selected stage.')
     parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
                         help='fixed uses --cruise-speed/config speed; random samples once per episode.')
+    parser.add_argument('--fixed-scene-maps', action='store_true',
+                        help='Reuse one deterministic ash map per scene instead of randomizing irregular maps every episode.')
+    parser.add_argument('--expert-warmup-episodes', type=int, default=0)
+    parser.add_argument('--behavior-clone-steps', type=int, default=0)
+    parser.add_argument('--bc-regularization-steps', type=int, default=0)
+    parser.add_argument('--expert-gain', type=float, default=1.0)
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to load before the first selected stage.')
     args = parser.parse_args()
@@ -193,17 +224,23 @@ def main():
             max_steps=args.max_steps,
             cruise_speed=args.cruise_speed,
             cruise_speed_mode=args.cruise_speed_mode,
+            fixed_scene_maps=args.fixed_scene_maps,
             learning_rate=args.learning_rate,
             batch_size=args.batch_size,
             buffer_size=args.buffer_size,
             noise_decay=args.noise_decay,
             min_noise=args.min_noise,
+            initial_noise=args.initial_noise,
             algorithm=args.algorithm,
             policy_noise=args.policy_noise,
             noise_clip=args.noise_clip,
             policy_delay=args.policy_delay,
             update_every=args.update_every,
             device=args.device,
+            expert_warmup_episodes=args.expert_warmup_episodes,
+            behavior_clone_steps=args.behavior_clone_steps,
+            bc_regularization_steps=args.bc_regularization_steps,
+            expert_gain=args.expert_gain,
             load_model=previous_model,
             episodes_override=args.episodes
         )

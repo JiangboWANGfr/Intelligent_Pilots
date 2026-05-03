@@ -27,6 +27,7 @@ class VolcanicAshEnv(gym.Env):
         ]
         self.scene_cursor = -1
         self.external_concentration_map = None
+        self.scene_map_cache = {}
         self.scene_name = self.config.scene_name or self.config.model_type
         self.ash_model = GMMVolcanicAshModel(self.config)
         self.concentration_map = self.ash_model.generate_concentration_map()
@@ -42,6 +43,11 @@ class VolcanicAshEnv(gym.Env):
         self.corridor_radius = 30.0
         self.lookahead_distance = 45.0
         self.reference_path_points = 160
+        self.path_planning_threshold_ratio = 0.8
+        self.path_risk_inflation_radius = 8.0
+        self.path_boundary_margin = 45.0
+        self.ash_avoidance_gain = 0.0
+        self.ash_avoidance_activation_ratio = 0.6
         self.cruise_speed_mode = 'fixed'
         self._refresh_runtime_parameters()
 
@@ -101,6 +107,8 @@ class VolcanicAshEnv(gym.Env):
             'forward_concentration': spaces.Box(low=0.0, high=1.0,
                                                 shape=(self.sensor_dim,), dtype=np.float32),
             'lookahead_vector': spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
+            'lookahead_heading_error': spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32),
+            'reference_turn_cmd': spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32),
             'cross_track_error': spaces.Box(low=0.0, high=3.0, shape=(1,), dtype=np.float32),
             'path_progress_ratio': spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         })
@@ -126,6 +134,32 @@ class VolcanicAshEnv(gym.Env):
         self.corridor_radius = float(getattr(self.config, 'path_corridor_radius', 30.0))
         self.lookahead_distance = float(getattr(self.config, 'path_lookahead_distance', 45.0))
         self.reference_path_points = int(getattr(self.config, 'reference_path_points', 160))
+        self.path_planning_threshold_ratio = float(getattr(
+            self.config,
+            'path_planning_threshold_ratio',
+            0.8
+        ))
+        self.path_planning_threshold_ratio = float(np.clip(
+            self.path_planning_threshold_ratio,
+            0.05,
+            1.0
+        ))
+        self.path_risk_inflation_radius = float(getattr(
+            self.config,
+            'path_risk_inflation_radius',
+            8.0
+        ))
+        self.path_boundary_margin = float(getattr(
+            self.config,
+            'path_boundary_margin',
+            45.0
+        ))
+        self.ash_avoidance_gain = float(getattr(self.config, 'ash_avoidance_gain', 0.0))
+        self.ash_avoidance_activation_ratio = float(getattr(
+            self.config,
+            'ash_avoidance_activation_ratio',
+            0.6
+        ))
 
     def _select_episode_cruise_speed(self) -> float:
         if self.cruise_speed_mode == 'random':
@@ -141,6 +175,10 @@ class VolcanicAshEnv(gym.Env):
 
     def _wrap_heading(self):
         self.heading = (self.heading + np.pi) % (2.0 * np.pi) - np.pi
+
+    @staticmethod
+    def _wrap_angle(angle: float) -> float:
+        return float((angle + np.pi) % (2.0 * np.pi) - np.pi)
 
     def _heading_to_velocity_dir(self) -> np.ndarray:
         return np.array([-np.sin(self.heading), np.cos(self.heading)], dtype=np.float32)
@@ -220,7 +258,9 @@ class VolcanicAshEnv(gym.Env):
             self.concentration_map,
             tuple(map(float, start_pos)),
             tuple(map(float, target_pos)),
-            max_concentration=self.safety_threshold,
+            max_concentration=self.safety_threshold * self.path_planning_threshold_ratio,
+            risk_inflation_radius=self.path_risk_inflation_radius,
+            boundary_margin=self.path_boundary_margin,
             desired_points=max(self.reference_path_points, 2)
         )
 
@@ -308,12 +348,54 @@ class VolcanicAshEnv(gym.Env):
         metrics['lookahead_delta'] = lookahead_delta.astype(np.float32)
         return metrics
 
+    def get_reference_turn_command(self, gain: float = 1.0) -> float:
+        heading_error = self.get_lookahead_heading_error()
+        path_cmd = -float(gain) * heading_error / (self.max_turn_rate + 1e-6)
+        ash_bias = self._get_ash_avoidance_turn_bias()
+        turn_cmd = path_cmd + self.ash_avoidance_gain * ash_bias
+        return float(np.clip(turn_cmd, -1.0, 1.0))
+
+    def _get_ash_avoidance_turn_bias(self) -> float:
+        if self.ash_avoidance_gain <= 0.0:
+            return 0.0
+
+        sensor_grid = self._get_forward_concentration_sensor().reshape(
+            len(self.ray_angles),
+            len(self.sensor_distances)
+        )
+        distance_weights = 1.0 / np.sqrt(np.maximum(self.sensor_distances, 1.0) / 10.0)
+        risk_by_angle = np.max(sensor_grid * distance_weights[None, :], axis=1)
+
+        left_mask = self.ray_angles > np.deg2rad(10.0)
+        right_mask = self.ray_angles < np.deg2rad(-10.0)
+        center_mask = np.abs(self.ray_angles) <= np.deg2rad(35.0)
+
+        left_risk = float(np.max(risk_by_angle[left_mask])) if np.any(left_mask) else 0.0
+        right_risk = float(np.max(risk_by_angle[right_mask])) if np.any(right_mask) else 0.0
+        center_risk = float(np.max(risk_by_angle[center_mask])) if np.any(center_mask) else 0.0
+        trigger_risk = max(left_risk, right_risk, center_risk)
+
+        activation = self.safety_threshold * self.ash_avoidance_activation_ratio
+        if trigger_risk <= activation:
+            return 0.0
+
+        pressure = (trigger_risk - activation) / max(self.safety_threshold - activation, 1e-6)
+        side_bias = (left_risk - right_risk) / max(self.safety_threshold, 1e-6)
+        return float(np.clip(pressure * side_bias, -1.0, 1.0))
+
+    def get_lookahead_heading_error(self) -> float:
+        metrics = self._get_path_tracking(self.aircraft_pos)
+        delta = metrics['lookahead_point'] - self.aircraft_pos
+        desired_heading = float(np.arctan2(-float(delta[0]), float(delta[1])))
+        return self._wrap_angle(desired_heading - self.heading)
+
     def _compute_reward(self,
                         old_pos: np.ndarray,
                         new_pos: np.ndarray,
                         action: np.ndarray,
                         turn_cmd: float,
                         turn_rate: float,
+                        reference_turn_cmd: float,
                         out_of_bounds: bool = False):
         reward = 0.0
 
@@ -365,6 +447,7 @@ class VolcanicAshEnv(gym.Env):
             lethal = True
 
         reward -= 0.05 * (turn_cmd ** 2)
+        reward -= 0.5 * ((turn_cmd - reference_turn_cmd) ** 2)
         action_change = float(abs(turn_cmd - self.prev_turn_cmd))
         reward -= 0.1 * action_change
         self.prev_turn_cmd = turn_cmd
@@ -411,6 +494,7 @@ class VolcanicAshEnv(gym.Env):
         self.external_concentration_map = np.clip(map_array, 0.0, 1.0)
         self.scene_configs = [VolcanicAshConfig.from_dict(runtime_config.to_dict())]
         self.scene_cursor = -1
+        self.scene_map_cache = {}
         self._update_environment_shape()
         self.concentration_map = np.array(self.external_concentration_map, copy=True)
 
@@ -458,13 +542,24 @@ class VolcanicAshEnv(gym.Env):
         else:
             self._update_environment_shape()
             self.ash_model = GMMVolcanicAshModel(self.config)
-            if self.config.enable_irregular:
-                episode_seed = int(self.np_random.integers(0, 99999))
-                self.ash_model.irregular_generator = IrregularAshGenerator(seed=episode_seed)
-                self.ash_model.config.wind_direction = float(self.np_random.integers(0, 360))
-                self.ash_model.config.turbulence_scale = float(0.08 + self.np_random.random() * 0.14)
-                self.ash_model.config.wind_strength = float(0.15 + self.np_random.random() * 0.25)
-            self.concentration_map = self.ash_model.generate_concentration_map()
+            randomize_irregular = bool(getattr(
+                self.config,
+                'randomize_irregular_each_episode',
+                True
+            ))
+            cache_key = self.scene_cursor
+            if (not randomize_irregular) and cache_key in self.scene_map_cache:
+                self.concentration_map = np.array(self.scene_map_cache[cache_key], copy=True)
+            else:
+                if self.config.enable_irregular and randomize_irregular:
+                    episode_seed = int(self.np_random.integers(0, 99999))
+                    self.ash_model.irregular_generator = IrregularAshGenerator(seed=episode_seed)
+                    self.ash_model.config.wind_direction = float(self.np_random.integers(0, 360))
+                    self.ash_model.config.turbulence_scale = float(0.08 + self.np_random.random() * 0.14)
+                    self.ash_model.config.wind_strength = float(0.15 + self.np_random.random() * 0.25)
+                self.concentration_map = self.ash_model.generate_concentration_map()
+                if not randomize_irregular:
+                    self.scene_map_cache[cache_key] = np.array(self.concentration_map, copy=True)
 
         self.cruise_speed = self._select_episode_cruise_speed()
         self.speed = self.cruise_speed
@@ -489,6 +584,8 @@ class VolcanicAshEnv(gym.Env):
         current_conc = self._get_concentration_at_pos(self.aircraft_pos)
         path_metrics = self._get_path_tracking(self.aircraft_pos)
         lookahead_delta = path_metrics['lookahead_delta']
+        heading_error = self.get_lookahead_heading_error()
+        reference_turn_cmd = self.get_reference_turn_command()
 
         return {
             'aircraft_pos': np.array([
@@ -514,6 +611,10 @@ class VolcanicAshEnv(gym.Env):
                 lookahead_delta[0] / self.height,
                 lookahead_delta[1] / self.width
             ], dtype=np.float32),
+            'lookahead_heading_error': np.array([
+                heading_error / np.pi
+            ], dtype=np.float32),
+            'reference_turn_cmd': np.array([reference_turn_cmd], dtype=np.float32),
             'cross_track_error': np.array([
                 min(float(path_metrics['cross_track_error']) / max(self.corridor_radius, 1e-6), 3.0)
             ], dtype=np.float32),
@@ -558,6 +659,7 @@ class VolcanicAshEnv(gym.Env):
         old_pos = self.aircraft_pos.copy()
 
         turn_cmd = float(action[0])
+        reference_turn_cmd = self.get_reference_turn_command()
         turn_rate = turn_cmd * self.max_turn_rate
         self.heading -= turn_rate * self.dt
         self._wrap_heading()
@@ -589,6 +691,7 @@ class VolcanicAshEnv(gym.Env):
             action=action,
             turn_cmd=turn_cmd,
             turn_rate=turn_rate,
+            reference_turn_cmd=reference_turn_cmd,
             out_of_bounds=out_of_bounds
         )
 
@@ -612,6 +715,7 @@ class VolcanicAshEnv(gym.Env):
             'segment_mean_concentration': mean_conc,
             'turn_rate': float(turn_rate),
             'turn_cmd': float(turn_cmd),
+            'reference_turn_cmd': float(reference_turn_cmd),
             'path_progress': float(path_progress),
             'heading_alignment': float(heading_alignment),
             'cross_track_error': float(path_metrics['cross_track_error'])

@@ -48,19 +48,28 @@ def build_scene_configs(config: VolcanicAshConfig,
 def apply_aircraft_runtime_config(config: VolcanicAshConfig,
                                   scene_configs: List[VolcanicAshConfig],
                                   cruise_speed: Optional[float],
-                                  cruise_speed_mode: str) -> None:
+                                  cruise_speed_mode: str,
+                                  fixed_scene_maps: bool) -> None:
     if cruise_speed is not None:
         config.fixed_cruise_speed = cruise_speed
     config.cruise_speed_mode = cruise_speed_mode
+    if fixed_scene_maps:
+        config.randomize_irregular_each_episode = False
 
     for scene in scene_configs:
         scene.fixed_cruise_speed = config.fixed_cruise_speed
         scene.min_cruise_speed = config.min_cruise_speed
         scene.max_cruise_speed = config.max_cruise_speed
         scene.cruise_speed_mode = config.cruise_speed_mode
+        scene.randomize_irregular_each_episode = config.randomize_irregular_each_episode
         scene.path_corridor_radius = config.path_corridor_radius
         scene.path_lookahead_distance = config.path_lookahead_distance
         scene.reference_path_points = config.reference_path_points
+        scene.path_planning_threshold_ratio = config.path_planning_threshold_ratio
+        scene.path_risk_inflation_radius = config.path_risk_inflation_radius
+        scene.path_boundary_margin = config.path_boundary_margin
+        scene.ash_avoidance_gain = config.ash_avoidance_gain
+        scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
 
 
 def main():
@@ -81,6 +90,8 @@ def main():
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--noise-decay', type=float, default=0.999)
     parser.add_argument('--min-noise', type=float, default=0.05)
+    parser.add_argument('--initial-noise', type=float, default=0.3,
+                        help='Initial Gaussian exploration noise scale.')
     parser.add_argument('--policy-noise', type=float, default=0.2,
                         help='TD3 target policy smoothing noise.')
     parser.add_argument('--noise-clip', type=float, default=0.5,
@@ -95,6 +106,18 @@ def main():
                         help='Fixed per-step cruise speed used by the aircraft model.')
     parser.add_argument('--cruise-speed-mode', choices=['fixed', 'random'], default='fixed',
                         help='fixed uses --cruise-speed/config speed; random samples once per episode.')
+    parser.add_argument('--fixed-scene-maps', action='store_true',
+                        help='Reuse one deterministic ash map per scene instead of randomizing irregular maps every episode.')
+    parser.add_argument('--expert-warmup-episodes', type=int, default=0,
+                        help='Collect this many pure-pursuit expert episodes before RL training.')
+    parser.add_argument('--behavior-clone-steps', type=int, default=0,
+                        help='Supervised actor pretraining steps using expert warmup states.')
+    parser.add_argument('--bc-regularization-steps', type=int, default=0,
+                        help='Extra behavior-cloning actor updates after each RL episode.')
+    parser.add_argument('--expert-gain', type=float, default=1.0,
+                        help='Pure-pursuit expert turn gain used for warmup.')
+    parser.add_argument('--imitation-only', action='store_true',
+                        help='Only run expert warmup and behavior cloning, then save the actor.')
     parser.add_argument('--save-dir', default='models')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
@@ -114,6 +137,10 @@ def main():
     print(f'  - Buffer size: {args.buffer_size}')
     print(f'  - Update every: {args.update_every} steps')
     print(f'  - Device: {args.device}')
+    print(f'  - Expert warmup episodes: {args.expert_warmup_episodes}')
+    print(f'  - Behavior clone steps: {args.behavior_clone_steps}')
+    print(f'  - BC regularization steps: {args.bc_regularization_steps}')
+    print(f'  - Imitation only: {args.imitation_only}')
     print('  - Environment: VolcanicAshEnv (Gymnasium)')
     print()
 
@@ -127,7 +154,8 @@ def main():
         config,
         scene_configs,
         cruise_speed=args.cruise_speed,
-        cruise_speed_mode=args.cruise_speed_mode
+        cruise_speed_mode=args.cruise_speed_mode,
+        fixed_scene_maps=args.fixed_scene_maps
     )
     config.training_scene_names = [scene.scene_name for scene in scene_configs]
 
@@ -137,7 +165,12 @@ def main():
     print(f'  Threshold: {config.concentration_threshold}')
     print(f'  Geo position: ({config.geo_center_lat}, {config.geo_center_lon})')
     print(f'  Cruise speed: {config.fixed_cruise_speed} ({config.cruise_speed_mode})')
+    print(f'  Randomize irregular maps: {config.randomize_irregular_each_episode}')
     print(f'  Path corridor radius: {config.path_corridor_radius}')
+    print(f'  Path planning threshold ratio: {config.path_planning_threshold_ratio}')
+    print(f'  Path risk inflation radius: {config.path_risk_inflation_radius}')
+    print(f'  Path boundary margin: {config.path_boundary_margin}')
+    print(f'  Ash avoidance gain: {config.ash_avoidance_gain}')
     print(f'  Training scenes: {len(scene_configs)}')
     for scene in scene_configs:
         print(f'    - {scene.scene_name or scene.model_type}')
@@ -152,10 +185,16 @@ def main():
         batch_size=args.batch_size,
         noise_decay=args.noise_decay,
         min_noise=args.min_noise,
+        initial_noise=args.initial_noise,
         algorithm=args.algorithm,
         policy_noise=args.policy_noise,
         noise_clip=args.noise_clip,
         policy_delay=args.policy_delay,
+        expert_warmup_episodes=args.expert_warmup_episodes,
+        behavior_clone_steps=args.behavior_clone_steps,
+        bc_regularization_steps=args.bc_regularization_steps,
+        expert_gain=args.expert_gain,
+        imitation_only=args.imitation_only,
         device=args.device,
         save_dir=args.save_dir,
         scene_configs=scene_configs
