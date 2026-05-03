@@ -50,7 +50,14 @@ class ValidationAnimationExporter:
             video_path = os.path.join(output_dir, f'{base_name}_avoidance.mp4')
 
         render_scale = self._compute_render_scale()
-        map_rgb = self._build_colored_map(render_scale)
+        dynamic_maps = path_result.get('concentration_maps', [])
+        dynamic_map_rgbs = []
+        if dynamic_maps:
+            dynamic_map_rgbs = [
+                self._build_colored_map(render_scale, concentration_map=map_array)
+                for map_array in dynamic_maps
+            ]
+        map_rgb = dynamic_map_rgbs[0] if dynamic_map_rgbs else self._build_colored_map(render_scale)
         panel_width = max(300, int(map_rgb.shape[1] * 0.34))
         frame_size = (map_rgb.shape[1] + panel_width, map_rgb.shape[0])
         frame_indices = self._build_frame_indices(len(waypoints), max_frames=max_frames)
@@ -70,8 +77,11 @@ class ValidationAnimationExporter:
             video_writer, actual_video_path, video_codec = self._create_video_writer(video_path, frame_size, fps)
 
         for frame_number, waypoint_index in enumerate(frame_indices):
+            frame_map_rgb = map_rgb
+            if dynamic_map_rgbs:
+                frame_map_rgb = dynamic_map_rgbs[min(waypoint_index, len(dynamic_map_rgbs) - 1)]
             frame_rgb = self._render_frame(
-                map_rgb=map_rgb,
+                map_rgb=frame_map_rgb,
                 panel_width=panel_width,
                 path_result=path_result,
                 waypoint_index=waypoint_index,
@@ -118,8 +128,15 @@ class ValidationAnimationExporter:
         longest_side = max(height, width)
         return max(2, min(6, int(np.ceil(720 / max(longest_side, 1)))))
 
-    def _build_colored_map(self, render_scale: int) -> np.ndarray:
-        map_array = self.concentration_map
+    def _build_colored_map(self,
+                           render_scale: int,
+                           concentration_map: Optional[np.ndarray] = None) -> np.ndarray:
+        map_array = self.concentration_map if concentration_map is None else np.asarray(concentration_map)
+        if map_array.dtype == np.uint8:
+            map_array = map_array.astype(np.float32) / 255.0
+        else:
+            map_array = map_array.astype(np.float32)
+        map_array = np.clip(map_array, 0.0, 1.0)
         rgb = np.full((map_array.shape[0], map_array.shape[1], 3), self.background_rgb, dtype=np.uint8)
         threshold = float(getattr(self.config, 'concentration_threshold', 0.3))
         safe_mask = (map_array >= threshold * 0.15) & (map_array < threshold * 0.5)

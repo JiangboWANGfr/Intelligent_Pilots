@@ -68,12 +68,15 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
                                   scene_configs: List[VolcanicAshConfig],
                                   cruise_speed: Optional[float],
                                   cruise_speed_mode: str,
-                                  fixed_scene_maps: bool) -> None:
+                                  fixed_scene_maps: bool,
+                                  dynamic_ash: bool = False) -> None:
     if cruise_speed is not None:
         config.fixed_cruise_speed = cruise_speed
     config.cruise_speed_mode = cruise_speed_mode
     if fixed_scene_maps:
         config.randomize_irregular_each_episode = False
+    if dynamic_ash:
+        config.enable_dynamic_ash = True
 
     for scene in scene_configs:
         scene.fixed_cruise_speed = config.fixed_cruise_speed
@@ -91,6 +94,13 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
         scene.airport_safety_threshold_ratio = config.airport_safety_threshold_ratio
         scene.airport_clearance_radius = config.airport_clearance_radius
+        scene.enable_dynamic_ash = config.enable_dynamic_ash
+        scene.ash_advection_speed = config.ash_advection_speed
+        scene.ash_diffusion_sigma = config.ash_diffusion_sigma
+        scene.ash_decay_rate = config.ash_decay_rate
+        scene.ash_turbulence_drift = config.ash_turbulence_drift
+        scene.ash_dynamic_update_interval = config.ash_dynamic_update_interval
+        scene.ash_dynamic_renormalize = config.ash_dynamic_renormalize
 
 
 def safe_filename(name: str) -> str:
@@ -225,6 +235,16 @@ def main():
                         help='fixed uses --cruise-speed/config speed; random samples once per episode.')
     parser.add_argument('--fixed-scene-maps', action='store_true',
                         help='Reuse one deterministic ash map per scene instead of randomizing irregular maps every episode.')
+    parser.add_argument('--dynamic-ash', action='store_true',
+                        help='Move ash clouds during each episode using wind advection, diffusion and decay.')
+    parser.add_argument('--ash-advection-speed', type=float, default=None,
+                        help='Ash cloud wind advection speed in pixels per environment step.')
+    parser.add_argument('--ash-diffusion-sigma', type=float, default=None,
+                        help='Gaussian diffusion sigma applied to ash cloud each dynamic update.')
+    parser.add_argument('--ash-decay-rate', type=float, default=None,
+                        help='Per-update concentration decay rate for dynamic ash.')
+    parser.add_argument('--ash-turbulence-drift', type=float, default=None,
+                        help='Per-update turbulent displacement strength in pixels.')
     parser.add_argument('--expert-warmup-episodes', type=int, default=0,
                         help='Collect this many pure-pursuit expert episodes before RL training.')
     parser.add_argument('--behavior-clone-steps', type=int, default=0,
@@ -272,6 +292,16 @@ def main():
         if args.random_scene_max_attempts is not None:
             config.random_scene_max_attempts = args.random_scene_max_attempts
         config.training_scene_names = []
+    if args.dynamic_ash:
+        config.enable_dynamic_ash = True
+    if args.ash_advection_speed is not None:
+        config.ash_advection_speed = args.ash_advection_speed
+    if args.ash_diffusion_sigma is not None:
+        config.ash_diffusion_sigma = args.ash_diffusion_sigma
+    if args.ash_decay_rate is not None:
+        config.ash_decay_rate = args.ash_decay_rate
+    if args.ash_turbulence_drift is not None:
+        config.ash_turbulence_drift = args.ash_turbulence_drift
     scene_configs = build_scene_configs(
         config,
         scene_names=None if args.random_ash_scenes else parse_scene_names(args.scenes),
@@ -282,7 +312,8 @@ def main():
         scene_configs,
         cruise_speed=args.cruise_speed,
         cruise_speed_mode=args.cruise_speed_mode,
-        fixed_scene_maps=args.fixed_scene_maps
+        fixed_scene_maps=args.fixed_scene_maps,
+        dynamic_ash=args.dynamic_ash
     )
     config.training_scene_names = [scene.scene_name for scene in scene_configs]
 
@@ -299,6 +330,12 @@ def main():
     print(f'  Geo position: ({config.geo_center_lat}, {config.geo_center_lon})')
     print(f'  Cruise speed: {config.fixed_cruise_speed} ({config.cruise_speed_mode})')
     print(f'  Randomize irregular maps: {config.randomize_irregular_each_episode}')
+    print(f'  Dynamic ash: {config.enable_dynamic_ash}')
+    if config.enable_dynamic_ash:
+        print(f'  Ash advection speed: {config.ash_advection_speed} px/step')
+        print(f'  Ash diffusion sigma: {config.ash_diffusion_sigma}')
+        print(f'  Ash decay rate: {config.ash_decay_rate}')
+        print(f'  Ash turbulence drift: {config.ash_turbulence_drift} px')
     print(f'  Path corridor radius: {config.path_corridor_radius}')
     print(f'  Path planning threshold ratio: {config.path_planning_threshold_ratio}')
     print(f'  Path risk inflation radius: {config.path_risk_inflation_radius}')

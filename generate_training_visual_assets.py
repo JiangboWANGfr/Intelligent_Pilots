@@ -170,6 +170,9 @@ def simulate_episode(env: VolcanicAshEnv,
                      scene_label: str,
                      milestone_label: str) -> Dict:
     state, info = env.reset(seed=seed)
+    concentration_maps = []
+    if getattr(env.config, 'enable_dynamic_ash', False):
+        concentration_maps.append((env.concentration_map * 255.0).astype(np.uint8))
     positions = [env.aircraft_pos.copy()]
     waypoints = [{
         'x': float(env.aircraft_pos[1]),
@@ -188,6 +191,8 @@ def simulate_episode(env: VolcanicAshEnv,
         total_reward += float(reward)
         max_concentration = max(max_concentration, current_conc)
         positions.append(env.aircraft_pos.copy())
+        if getattr(env.config, 'enable_dynamic_ash', False):
+            concentration_maps.append((env.concentration_map * 255.0).astype(np.uint8))
         waypoints.append({
             'x': float(env.aircraft_pos[1]),
             'y': float(env.aircraft_pos[0]),
@@ -197,7 +202,7 @@ def simulate_episode(env: VolcanicAshEnv,
             break
 
     success = bool(terminated and info.get('distance_to_target', float('inf')) < env.success_threshold)
-    return {
+    result = {
         'scene_name': f'{scene_label}_{milestone_label}',
         'planning_method': 'rl_checkpoint',
         'waypoints': waypoints,
@@ -217,6 +222,9 @@ def simulate_episode(env: VolcanicAshEnv,
             'path_progress_ratio': float(info.get('path_progress_ratio', 0.0))
         }
     }
+    if concentration_maps:
+        result['concentration_maps'] = concentration_maps
+    return result
 
 
 def export_checkpoint_animations(model_dir: str,
@@ -231,8 +239,23 @@ def export_checkpoint_animations(model_dir: str,
                                  include_untrained: bool,
                                  random_ash_scenes: bool = False,
                                  random_centers_range: Tuple[int, int] = (1, 6),
-                                 random_scene_seed: Optional[int] = None) -> List[Dict]:
+                                 random_scene_seed: Optional[int] = None,
+                                 dynamic_ash: bool = False,
+                                 ash_advection_speed: Optional[float] = None,
+                                 ash_diffusion_sigma: Optional[float] = None,
+                                 ash_decay_rate: Optional[float] = None,
+                                 ash_turbulence_drift: Optional[float] = None) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
+    if dynamic_ash:
+        config.enable_dynamic_ash = True
+    if ash_advection_speed is not None:
+        config.ash_advection_speed = ash_advection_speed
+    if ash_diffusion_sigma is not None:
+        config.ash_diffusion_sigma = ash_diffusion_sigma
+    if ash_decay_rate is not None:
+        config.ash_decay_rate = ash_decay_rate
+    if ash_turbulence_drift is not None:
+        config.ash_turbulence_drift = ash_turbulence_drift
     if random_ash_scenes:
         config.use_random_ash_scenes = True
         config.random_scene_seed = seed if random_scene_seed is None else random_scene_seed
@@ -249,7 +272,8 @@ def export_checkpoint_animations(model_dir: str,
         scene_configs,
         cruise_speed=cruise_speed,
         cruise_speed_mode='fixed',
-        fixed_scene_maps=fixed_scene_maps
+        fixed_scene_maps=fixed_scene_maps,
+        dynamic_ash=dynamic_ash
     )
     env = VolcanicAshEnv(config, scene_configs=scene_configs)
     env.max_steps = max_steps
@@ -336,6 +360,13 @@ def main():
                         help='Number of deterministic random scenes to render.')
     parser.add_argument('--random-scene-seed', type=int, default=None,
                         help='Base seed for deterministic random demo scenes.')
+    parser.add_argument('--dynamic-ash', action='store_true',
+                        help='Render moving ash clouds in checkpoint animations.')
+    parser.add_argument('--ash-advection-speed', type=float, default=None,
+                        help='Ash cloud wind advection speed in pixels per environment step.')
+    parser.add_argument('--ash-diffusion-sigma', type=float, default=None)
+    parser.add_argument('--ash-decay-rate', type=float, default=None)
+    parser.add_argument('--ash-turbulence-drift', type=float, default=None)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--max-steps', type=int, default=260)
     parser.add_argument('--max-checkpoints', type=int, default=4)
@@ -351,6 +382,7 @@ def main():
         'config': args.config,
         'scene': args.scene,
         'random_ash_scenes': args.random_ash_scenes,
+        'dynamic_ash': args.dynamic_ash,
         'random_centers_range': list(args.random_centers_range),
         'random_demo_scenes': args.random_demo_scenes,
         'metric_plots': [],
@@ -394,7 +426,12 @@ def main():
                     (args.random_scene_seed if args.random_scene_seed is not None else args.seed)
                     + scene_index
                     if args.random_ash_scenes else None
-                )
+                ),
+                dynamic_ash=args.dynamic_ash,
+                ash_advection_speed=args.ash_advection_speed,
+                ash_diffusion_sigma=args.ash_diffusion_sigma,
+                ash_decay_rate=args.ash_decay_rate,
+                ash_turbulence_drift=args.ash_turbulence_drift
             ))
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')

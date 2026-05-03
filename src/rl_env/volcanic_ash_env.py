@@ -1,5 +1,6 @@
 import gymnasium as gym
 from gymnasium import spaces
+import cv2
 import numpy as np
 from copy import deepcopy
 from typing import Dict, Tuple, Optional, List
@@ -56,6 +57,15 @@ class VolcanicAshEnv(gym.Env):
         self.ash_avoidance_activation_ratio = 0.6
         self.airport_safety_threshold_ratio = 0.35
         self.airport_clearance_radius = 35.0
+        self.enable_dynamic_ash = False
+        self.ash_advection_speed = 0.8
+        self.ash_diffusion_sigma = 0.25
+        self.ash_decay_rate = 0.001
+        self.ash_turbulence_drift = 0.25
+        self.ash_dynamic_update_interval = 1
+        self.ash_dynamic_renormalize = False
+        self.ash_dynamic_noise_x = None
+        self.ash_dynamic_noise_y = None
         self.safe_airport_mask = None
         self.cruise_speed_mode = 'fixed'
         self._refresh_runtime_parameters()
@@ -179,6 +189,33 @@ class VolcanicAshEnv(gym.Env):
             'airport_clearance_radius',
             35.0
         ))
+        self.enable_dynamic_ash = bool(getattr(self.config, 'enable_dynamic_ash', False))
+        self.ash_advection_speed = float(getattr(self.config, 'ash_advection_speed', 0.8))
+        self.ash_diffusion_sigma = max(0.0, float(getattr(
+            self.config,
+            'ash_diffusion_sigma',
+            0.25
+        )))
+        self.ash_decay_rate = float(np.clip(
+            getattr(self.config, 'ash_decay_rate', 0.001),
+            0.0,
+            0.05
+        ))
+        self.ash_turbulence_drift = max(0.0, float(getattr(
+            self.config,
+            'ash_turbulence_drift',
+            0.25
+        )))
+        self.ash_dynamic_update_interval = max(1, int(getattr(
+            self.config,
+            'ash_dynamic_update_interval',
+            1
+        )))
+        self.ash_dynamic_renormalize = bool(getattr(
+            self.config,
+            'ash_dynamic_renormalize',
+            False
+        ))
 
     def _select_episode_cruise_speed(self) -> float:
         if self.cruise_speed_mode == 'random':
@@ -219,6 +256,74 @@ class VolcanicAshEnv(gym.Env):
 
     def _get_concentration_at(self, pos: np.ndarray) -> float:
         return self._get_concentration_at_pos(pos)
+
+    def _initialize_dynamic_ash_fields(self):
+        if not self.enable_dynamic_ash:
+            self.ash_dynamic_noise_x = None
+            self.ash_dynamic_noise_y = None
+            return
+
+        base_seed = getattr(self.config, 'random_seed', None)
+        if base_seed is None:
+            base_seed = int(self.np_random.integers(0, 2**31 - 1))
+        generator = IrregularAshGenerator(seed=int(base_seed) + 7919)
+        self.ash_dynamic_noise_x = (
+            generator.generate_fast_noise((self.height, self.width), scale=130.0, octaves=3) - 0.5
+        ).astype(np.float32)
+        self.ash_dynamic_noise_y = (
+            generator.generate_fast_noise((self.height, self.width), scale=130.0, octaves=3) - 0.5
+        ).astype(np.float32)
+
+    def _advance_dynamic_ash(self):
+        if (
+            not self.enable_dynamic_ash
+            or self.external_concentration_map is not None
+            or self.step_count % self.ash_dynamic_update_interval != 0
+        ):
+            return
+
+        wind_rad = np.deg2rad(float(getattr(self.config, 'wind_direction', 0.0)))
+        dx = self.ash_advection_speed * np.cos(wind_rad)
+        dy = -self.ash_advection_speed * np.sin(wind_rad)
+
+        y_coords, x_coords = np.meshgrid(
+            np.arange(self.height, dtype=np.float32),
+            np.arange(self.width, dtype=np.float32),
+            indexing='ij'
+        )
+        if self.ash_dynamic_noise_x is None or self.ash_dynamic_noise_y is None:
+            self._initialize_dynamic_ash_fields()
+
+        turbulence = self.ash_turbulence_drift
+        map_x = (x_coords - dx - turbulence * self.ash_dynamic_noise_x).astype(np.float32)
+        map_y = (y_coords - dy - turbulence * self.ash_dynamic_noise_y).astype(np.float32)
+        moved = cv2.remap(
+            self.concentration_map.astype(np.float32),
+            map_x,
+            map_y,
+            interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0.0
+        )
+
+        if self.ash_diffusion_sigma > 0.0:
+            moved = cv2.GaussianBlur(
+                moved,
+                ksize=(0, 0),
+                sigmaX=self.ash_diffusion_sigma,
+                sigmaY=self.ash_diffusion_sigma
+            )
+
+        if self.ash_decay_rate > 0.0:
+            moved *= (1.0 - self.ash_decay_rate)
+
+        if self.ash_dynamic_renormalize:
+            max_value = float(np.max(moved))
+            if max_value > 1e-6:
+                original_max = max(float(np.max(self.concentration_map)), 1e-6)
+                moved *= min(original_max / max_value, 1.0)
+
+        self.concentration_map = np.clip(moved, 0.0, 1.0).astype(np.float32)
 
     def _sample_safe_point(self, margin: int = 50, max_tries: int = 2000) -> np.ndarray:
         safe_limit = self.safety_threshold * self.airport_safety_threshold_ratio
@@ -622,6 +727,7 @@ class VolcanicAshEnv(gym.Env):
                 self.concentration_map = self.ash_model.generate_concentration_map()
                 if not randomize_irregular:
                     self.scene_map_cache[cache_key] = np.array(self.concentration_map, copy=True)
+        self._initialize_dynamic_ash_fields()
 
         self.cruise_speed = self._select_episode_cruise_speed()
         self.speed = self.cruise_speed
@@ -765,6 +871,7 @@ class VolcanicAshEnv(gym.Env):
 
         self.max_concentration_exposure = max(self.max_concentration_exposure, max_conc)
         self.trajectory.append(self.aircraft_pos.copy())
+        self._advance_dynamic_ash()
 
         observation = self._get_observation()
         info = self._get_info()

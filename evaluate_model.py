@@ -30,12 +30,15 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
                                   scene_configs: List[VolcanicAshConfig],
                                   cruise_speed: Optional[float],
                                   cruise_speed_mode: str,
-                                  fixed_scene_maps: bool) -> None:
+                                  fixed_scene_maps: bool,
+                                  dynamic_ash: bool = False) -> None:
     if cruise_speed is not None:
         config.fixed_cruise_speed = cruise_speed
     config.cruise_speed_mode = cruise_speed_mode
     if fixed_scene_maps:
         config.randomize_irregular_each_episode = False
+    if dynamic_ash:
+        config.enable_dynamic_ash = True
 
     for scene in scene_configs:
         scene.fixed_cruise_speed = config.fixed_cruise_speed
@@ -53,6 +56,13 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
         scene.airport_safety_threshold_ratio = config.airport_safety_threshold_ratio
         scene.airport_clearance_radius = config.airport_clearance_radius
+        scene.enable_dynamic_ash = config.enable_dynamic_ash
+        scene.ash_advection_speed = config.ash_advection_speed
+        scene.ash_diffusion_sigma = config.ash_diffusion_sigma
+        scene.ash_decay_rate = config.ash_decay_rate
+        scene.ash_turbulence_drift = config.ash_turbulence_drift
+        scene.ash_dynamic_update_interval = config.ash_dynamic_update_interval
+        scene.ash_dynamic_renormalize = config.ash_dynamic_renormalize
 
 
 def infer_algorithm(model_path: str, requested: str) -> str:
@@ -169,6 +179,12 @@ def main():
                         help='fixed uses --cruise-speed/config speed; random samples once per episode.')
     parser.add_argument('--fixed-scene-maps', action='store_true',
                         help='Reuse one deterministic ash map per scene instead of randomizing irregular maps every episode.')
+    parser.add_argument('--dynamic-ash', action='store_true',
+                        help='Move ash clouds during evaluation using wind advection, diffusion and decay.')
+    parser.add_argument('--ash-advection-speed', type=float, default=None)
+    parser.add_argument('--ash-diffusion-sigma', type=float, default=None)
+    parser.add_argument('--ash-decay-rate', type=float, default=None)
+    parser.add_argument('--ash-turbulence-drift', type=float, default=None)
     parser.add_argument('--output', default='output/evaluation_results.json',
                         help='Where to write detailed JSON results.')
     args = parser.parse_args()
@@ -179,13 +195,24 @@ def main():
         raise FileNotFoundError(f'Model not found: {args.model}')
 
     config = VolcanicAshConfig.load(args.config)
+    if args.dynamic_ash:
+        config.enable_dynamic_ash = True
+    if args.ash_advection_speed is not None:
+        config.ash_advection_speed = args.ash_advection_speed
+    if args.ash_diffusion_sigma is not None:
+        config.ash_diffusion_sigma = args.ash_diffusion_sigma
+    if args.ash_decay_rate is not None:
+        config.ash_decay_rate = args.ash_decay_rate
+    if args.ash_turbulence_drift is not None:
+        config.ash_turbulence_drift = args.ash_turbulence_drift
     scene_configs = build_scene_configs(config, parse_scene_names(args.scenes))
     apply_aircraft_runtime_config(
         config,
         scene_configs,
         cruise_speed=args.cruise_speed,
         cruise_speed_mode=args.cruise_speed_mode,
-        fixed_scene_maps=args.fixed_scene_maps
+        fixed_scene_maps=args.fixed_scene_maps,
+        dynamic_ash=args.dynamic_ash
     )
     env = VolcanicAshEnv(config, scene_configs=scene_configs)
     env.max_steps = args.max_steps
@@ -213,6 +240,7 @@ def main():
         'fixed_cruise_speed': config.fixed_cruise_speed,
         'cruise_speed_mode': config.cruise_speed_mode,
         'randomize_irregular_each_episode': config.randomize_irregular_each_episode,
+        'dynamic_ash': config.enable_dynamic_ash,
         'scene_names': [scene.scene_name or scene.model_type for scene in scene_configs],
         'seed': args.seed,
         'max_steps': args.max_steps,

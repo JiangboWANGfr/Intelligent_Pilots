@@ -84,6 +84,13 @@ class VolcanicAshConfig:
     random_scene_max_low_area: float = 48.0
     random_scene_max_high_area: float = 12.0
     random_scene_max_attempts: int = 8
+    enable_dynamic_ash: bool = False
+    ash_advection_speed: float = 0.8
+    ash_diffusion_sigma: float = 0.25
+    ash_decay_rate: float = 0.001
+    ash_turbulence_drift: float = 0.25
+    ash_dynamic_update_interval: int = 1
+    ash_dynamic_renormalize: bool = False
     
     def __post_init__(self):
         if self.centers is None:
@@ -150,7 +157,14 @@ class VolcanicAshConfig:
             'random_scene_max_medium_area': self.random_scene_max_medium_area,
             'random_scene_max_low_area': self.random_scene_max_low_area,
             'random_scene_max_high_area': self.random_scene_max_high_area,
-            'random_scene_max_attempts': self.random_scene_max_attempts
+            'random_scene_max_attempts': self.random_scene_max_attempts,
+            'enable_dynamic_ash': self.enable_dynamic_ash,
+            'ash_advection_speed': self.ash_advection_speed,
+            'ash_diffusion_sigma': self.ash_diffusion_sigma,
+            'ash_decay_rate': self.ash_decay_rate,
+            'ash_turbulence_drift': self.ash_turbulence_drift,
+            'ash_dynamic_update_interval': self.ash_dynamic_update_interval,
+            'ash_dynamic_renormalize': self.ash_dynamic_renormalize
         }
     
     @classmethod
