@@ -101,24 +101,59 @@ def build_preview_image(concentration_map: np.ndarray,
     return preview
 
 
+def summarize_area(concentration_map: np.ndarray, config: VolcanicAshConfig) -> Dict[str, float]:
+    return {
+        'low_risk_area_percent': float(
+            np.mean(concentration_map >= config.concentration_threshold * 0.45) * 100.0
+        ),
+        'medium_risk_area_percent': float(
+            np.mean(concentration_map >= config.concentration_threshold) * 100.0
+        ),
+        'high_risk_area_percent': float(
+            np.mean(concentration_map >= config.concentration_threshold * 1.45) * 100.0
+        )
+    }
+
+
+def generate_valid_case(case_index: int,
+                        args,
+                        rng: np.random.Generator) -> Tuple[List[Dict], VolcanicAshConfig, np.ndarray]:
+    last_case = None
+    for _ in range(args.max_attempts):
+        centers = sample_rotated_centers(args, rng)
+        config = VolcanicAshConfig(
+            model_type='rotated_random_gmm',
+            num_centers=len(centers),
+            cloud_size=args.cloud_size,
+            concentration_threshold=args.threshold,
+            mass_ratio=1.0,
+            image_size=args.image_size,
+            centers=centers,
+            enable_irregular=False,
+            random_seed=args.seed + case_index
+        )
+        model = GMMVolcanicAshModel(config)
+        concentration_map = model.generate_concentration_map(irregular=False)
+        area = summarize_area(concentration_map, config)
+        last_case = (centers, config, concentration_map)
+
+        if (
+            args.min_medium_area <= area['medium_risk_area_percent'] <= args.max_medium_area
+            and area['low_risk_area_percent'] <= args.max_low_area
+            and area['high_risk_area_percent'] <= args.max_high_area
+        ):
+            return centers, config, concentration_map
+
+    return last_case
+
+
 def save_case(case_index: int,
               args,
               rng: np.random.Generator,
               output_dir: str) -> Dict:
-    centers = sample_rotated_centers(args, rng)
-    config = VolcanicAshConfig(
-        model_type='rotated_random_gmm',
-        num_centers=len(centers),
-        cloud_size=args.cloud_size,
-        concentration_threshold=args.threshold,
-        mass_ratio=1.0,
-        image_size=args.image_size,
-        centers=centers,
-        enable_irregular=False,
-        random_seed=args.seed + case_index
-    )
+    centers, config, concentration_map = generate_valid_case(case_index, args, rng)
     model = GMMVolcanicAshModel(config)
-    concentration_map = model.generate_concentration_map(irregular=False)
+    area = summarize_area(concentration_map, config)
 
     prefix = f'rotated_gmm_{case_index:03d}'
     concentration_path = os.path.join(output_dir, f'{prefix}_concentration.png')
@@ -144,9 +179,7 @@ def save_case(case_index: int,
         'config_path': config_path,
         'max_concentration': float(np.max(concentration_map)),
         'mean_concentration': float(np.mean(concentration_map)),
-        'high_risk_area_percent': float(
-            np.mean(concentration_map >= config.concentration_threshold) * 100.0
-        ),
+        **area,
         'centers': centers
     }
 
@@ -162,18 +195,28 @@ def main():
                         default=(512, 512),
                         help='Image size as height,width.')
     parser.add_argument('--center-count-range', type=lambda value: parse_pair(value, int),
-                        default=(2, 5),
+                        default=(2, 4),
                         help='Random number of Gaussian centers as min,max.')
-    parser.add_argument('--position-margin', type=float, default=70.0)
+    parser.add_argument('--position-margin', type=float, default=90.0)
     parser.add_argument('--weight-range', type=lambda value: parse_pair(value, float),
                         default=(0.3, 1.0))
     parser.add_argument('--std-range', type=lambda value: parse_pair(value, float),
-                        default=(35.0, 85.0))
+                        default=(22.0, 55.0))
     parser.add_argument('--anisotropy-range', type=lambda value: parse_pair(value, float),
-                        default=(1.8, 4.0),
+                        default=(1.5, 3.2),
                         help='Axis ratio range. Larger values make longer ellipses.')
-    parser.add_argument('--cloud-size', type=float, default=90.0)
-    parser.add_argument('--threshold', type=float, default=0.28)
+    parser.add_argument('--cloud-size', type=float, default=75.0)
+    parser.add_argument('--threshold', type=float, default=0.3)
+    parser.add_argument('--min-medium-area', type=float, default=4.0,
+                        help='Minimum percent of pixels above threshold.')
+    parser.add_argument('--max-medium-area', type=float, default=22.0,
+                        help='Maximum percent of pixels above threshold.')
+    parser.add_argument('--max-low-area', type=float, default=45.0,
+                        help='Maximum percent of pixels in the visible low-risk cloud.')
+    parser.add_argument('--max-high-area', type=float, default=9.0,
+                        help='Maximum percent of pixels in the high-risk core.')
+    parser.add_argument('--max-attempts', type=int, default=200,
+                        help='Rejection-sampling attempts per preview case.')
     args = parser.parse_args()
 
     if args.center_count_range[0] < 1 or args.center_count_range[0] > args.center_count_range[1]:

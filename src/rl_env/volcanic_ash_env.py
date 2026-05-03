@@ -3,6 +3,7 @@ from gymnasium import spaces
 import numpy as np
 from copy import deepcopy
 from typing import Dict, Tuple, Optional, List
+from scipy.ndimage import distance_transform_edt
 from src.model.gmm_model import GMMVolcanicAshModel
 from src.model.irregular_ash_generator import IrregularAshGenerator
 from src.path_planning.fallback_planner import FallbackPlanner
@@ -48,6 +49,9 @@ class VolcanicAshEnv(gym.Env):
         self.path_boundary_margin = 45.0
         self.ash_avoidance_gain = 0.0
         self.ash_avoidance_activation_ratio = 0.6
+        self.airport_safety_threshold_ratio = 0.35
+        self.airport_clearance_radius = 35.0
+        self.safe_airport_mask = None
         self.cruise_speed_mode = 'fixed'
         self._refresh_runtime_parameters()
 
@@ -160,6 +164,16 @@ class VolcanicAshEnv(gym.Env):
             'ash_avoidance_activation_ratio',
             0.6
         ))
+        self.airport_safety_threshold_ratio = float(getattr(
+            self.config,
+            'airport_safety_threshold_ratio',
+            0.35
+        ))
+        self.airport_clearance_radius = float(getattr(
+            self.config,
+            'airport_clearance_radius',
+            35.0
+        ))
 
     def _select_episode_cruise_speed(self) -> float:
         if self.cruise_speed_mode == 'random':
@@ -202,7 +216,7 @@ class VolcanicAshEnv(gym.Env):
         return self._get_concentration_at_pos(pos)
 
     def _sample_safe_point(self, margin: int = 50, max_tries: int = 2000) -> np.ndarray:
-        safe_limit = self.safety_threshold * 0.8
+        safe_limit = self.safety_threshold * self.airport_safety_threshold_ratio
         margin_y = min(margin, max(0, (self.height - 2) // 2))
         margin_x = min(margin, max(0, (self.width - 2) // 2))
         low_y, high_y = margin_y, max(margin_y + 1, self.height - margin_y)
@@ -213,15 +227,45 @@ class VolcanicAshEnv(gym.Env):
                 self.np_random.integers(low_y, high_y),
                 self.np_random.integers(low_x, high_x)
             ], dtype=np.float32)
-            if self._get_concentration_at_pos(pos) < safe_limit:
+            y, x = int(pos[0]), int(pos[1])
+            if self._get_concentration_at_pos(pos) < safe_limit and self.safe_airport_mask[y, x]:
                 return pos
 
-        safe_indices = np.argwhere(self.concentration_map < safe_limit)
+        safe_indices = np.argwhere(self.safe_airport_mask)
         if len(safe_indices) > 0:
             idx = safe_indices[self.np_random.integers(0, len(safe_indices))]
             return np.array([idx[0], idx[1]], dtype=np.float32)
 
         return np.array([self.height // 2, self.width // 2], dtype=np.float32)
+
+    def _build_safe_airport_mask(self, margin: int = 50) -> np.ndarray:
+        safe_limit = self.safety_threshold * self.airport_safety_threshold_ratio
+        near_cloud_limit = self.safety_threshold * 0.5
+        base_safe = self.concentration_map < safe_limit
+        distance_to_cloud = distance_transform_edt(self.concentration_map < near_cloud_limit)
+        clearance_safe = distance_to_cloud >= self.airport_clearance_radius
+        mask = base_safe & clearance_safe
+
+        margin_y = min(margin, max(0, (self.height - 2) // 2))
+        margin_x = min(margin, max(0, (self.width - 2) // 2))
+        if margin_y > 0:
+            mask[:margin_y, :] = False
+            mask[self.height - margin_y:, :] = False
+        if margin_x > 0:
+            mask[:, :margin_x] = False
+            mask[:, self.width - margin_x:] = False
+
+        if np.any(mask):
+            return mask
+
+        fallback = base_safe.copy()
+        if margin_y > 0:
+            fallback[:margin_y, :] = False
+            fallback[self.height - margin_y:, :] = False
+        if margin_x > 0:
+            fallback[:, :margin_x] = False
+            fallback[:, self.width - margin_x:] = False
+        return fallback if np.any(fallback) else base_safe
 
     def _get_forward_concentration_sensor(self) -> np.ndarray:
         values = []
@@ -565,6 +609,7 @@ class VolcanicAshEnv(gym.Env):
         self.speed = self.cruise_speed
 
         margin = 50
+        self.safe_airport_mask = self._build_safe_airport_mask(margin)
         aircraft_pos = self._sample_safe_point(margin)
 
         min_distance = min(self.width, self.height) * 0.4

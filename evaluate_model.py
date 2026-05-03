@@ -51,6 +51,8 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.path_boundary_margin = config.path_boundary_margin
         scene.ash_avoidance_gain = config.ash_avoidance_gain
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
+        scene.airport_safety_threshold_ratio = config.airport_safety_threshold_ratio
+        scene.airport_clearance_radius = config.airport_clearance_radius
 
 
 def infer_algorithm(model_path: str, requested: str) -> str:

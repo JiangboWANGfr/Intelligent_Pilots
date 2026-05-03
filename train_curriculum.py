@@ -110,6 +110,8 @@ def train_stage(stage: Dict,
         scene.path_boundary_margin = base_config.path_boundary_margin
         scene.ash_avoidance_gain = base_config.ash_avoidance_gain
         scene.ash_avoidance_activation_ratio = base_config.ash_avoidance_activation_ratio
+        scene.airport_safety_threshold_ratio = base_config.airport_safety_threshold_ratio
+        scene.airport_clearance_radius = base_config.airport_clearance_radius
 
     stage_config = VolcanicAshConfig.from_dict(scene_configs[0].to_dict())
     stage_config.geo_center_lat = base_config.geo_center_lat

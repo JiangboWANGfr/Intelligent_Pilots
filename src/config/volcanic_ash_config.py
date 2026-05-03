@@ -47,6 +47,8 @@ class VolcanicAshConfig:
     path_boundary_margin: float = 45.0
     ash_avoidance_gain: float = 0.0
     ash_avoidance_activation_ratio: float = 0.6
+    airport_safety_threshold_ratio: float = 0.35
+    airport_clearance_radius: float = 35.0
     centers: List[Dict] = None
     scene_name: str = ""
     training_scene_names: List[str] = None
@@ -94,6 +96,8 @@ class VolcanicAshConfig:
             'path_boundary_margin': self.path_boundary_margin,
             'ash_avoidance_gain': self.ash_avoidance_gain,
             'ash_avoidance_activation_ratio': self.ash_avoidance_activation_ratio,
+            'airport_safety_threshold_ratio': self.airport_safety_threshold_ratio,
+            'airport_clearance_radius': self.airport_clearance_radius,
             'centers': self.centers,
             'scene_name': self.scene_name,
             'training_scene_names': self.training_scene_names,
