@@ -43,6 +43,7 @@ class Trainer:
         self.num_episodes = num_episodes
         self.max_steps = max_steps_per_episode
         self.save_dir = save_dir
+        self.learning_rate = learning_rate
         self.noise_decay = noise_decay
         self.min_noise = min_noise
         self.algorithm = algorithm.lower()
@@ -102,6 +103,7 @@ class Trainer:
             'scene_names': [],
             'algorithm': self.algorithm,
             'device': str(self.agent.device),
+            'learning_rate': self.learning_rate,
             'initial_noise': self.initial_noise,
             'expert_warmup_episodes': self.expert_warmup_episodes,
             'behavior_clone_steps': self.behavior_clone_steps,
@@ -280,6 +282,7 @@ class Trainer:
             self.training_history['losses'].append(episode_loss_sum / max(loss_count, 1))
             self.training_history['actor_losses'].append(episode_actor_loss_sum / max(actor_loss_count, 1))
             self.training_history['critic_losses'].append(episode_critic_loss_sum / max(loss_count, 1))
+            self.training_history.setdefault('learning_rates', []).append(self.learning_rate)
             self.training_history['steps'].append(step + 1)
             self.training_history['success_rates'].append(success_rate)
             self.training_history['success_flags'].append(success)

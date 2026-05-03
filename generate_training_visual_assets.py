@@ -26,6 +26,14 @@ def moving_average(values: List[float], window: int) -> np.ndarray:
     return np.convolve(array, kernel, mode='same')
 
 
+def rolling_success_rate(history: Dict, window: int = 25) -> List[float]:
+    flags = history.get('success_flags', [])
+    if not flags:
+        return history.get('success_rates', [])
+    values = [100.0 if flag else 0.0 for flag in flags]
+    return moving_average(values, window).tolist()
+
+
 def load_history(model_dir: str) -> Optional[Dict]:
     history_path = os.path.join(model_dir, 'training_history.json')
     if not os.path.exists(history_path):
@@ -43,9 +51,10 @@ def save_training_metric_plots(history: Dict, output_dir: str) -> List[str]:
     outputs = []
     plot_specs = [
         ('reward_curve.png', 'Episode Reward', 'Reward', history.get('rewards', []), True),
+        ('learning_rate_curve.png', 'Learning Rate', 'Learning Rate', history.get('learning_rates', []), False),
         ('loss_curve.png', 'Training Loss', 'Loss', history.get('losses', []), True),
         ('actor_critic_loss_curve.png', 'Actor/Critic Loss', 'Loss', None, False),
-        ('success_rate_curve.png', 'Success Rate', 'Success %', history.get('success_rates', []), False),
+        ('success_rate_curve.png', 'Rolling Success Rate', 'Success %', rolling_success_rate(history), False),
         ('ash_exposure_curve.png', 'Ash Exposure', 'Exposure', history.get('ash_exposures', []), True),
         ('cross_track_error_curve.png', 'Cross Track Error', 'Pixels', history.get('cross_track_errors', []), True),
         ('final_distance_curve.png', 'Final Distance', 'Pixels', history.get('final_distances', []), True),
@@ -86,14 +95,14 @@ def save_training_metric_plots(history: Dict, output_dir: str) -> List[str]:
     fig, axes = plt.subplots(3, 2, figsize=(14, 13))
     dashboard_items = [
         ('rewards', 'Reward'),
-        ('success_rates', 'Success Rate (%)'),
+        ('__rolling_success__', 'Rolling Success Rate (%)'),
         ('losses', 'Loss'),
         ('ash_exposures', 'Ash Exposure'),
         ('cross_track_errors', 'Cross Track Error'),
         ('final_distances', 'Final Distance'),
     ]
     for ax, (key, title) in zip(axes.flat, dashboard_items):
-        values = history.get(key, [])
+        values = rolling_success_rate(history) if key == '__rolling_success__' else history.get(key, [])
         if values:
             xs = episodes[:len(values)]
             ax.plot(xs, values, alpha=0.28)
@@ -290,6 +299,8 @@ def main():
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--max-steps', type=int, default=260)
     parser.add_argument('--max-checkpoints', type=int, default=4)
+    parser.add_argument('--learning-rate', type=float, default=None,
+                        help='Fallback learning rate used for histories that do not store learning_rates.')
     parser.add_argument('--include-untrained', action='store_true')
     parser.add_argument('--skip-animations', action='store_true')
     args = parser.parse_args()
@@ -305,6 +316,8 @@ def main():
 
     history = load_history(args.model_dir)
     if history is not None:
+        if 'learning_rates' not in history and args.learning_rate is not None:
+            history['learning_rates'] = [args.learning_rate for _ in history.get('episodes', [])]
         summary['metric_plots'] = save_training_metric_plots(
             history,
             os.path.join(args.output_dir, 'metrics')
