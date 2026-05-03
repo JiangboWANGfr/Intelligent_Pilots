@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -161,6 +162,120 @@ def find_milestone_checkpoints(model_dir: str,
     if include_final and os.path.exists(final_path):
         selected.append(('final', final_path))
     return selected
+
+
+def find_font_path() -> Optional[str]:
+    candidates = [
+        '/System/Library/Fonts/PingFang.ttc',
+        '/System/Library/Fonts/STHeiti Light.ttc',
+        '/Library/Fonts/Arial Unicode.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def get_font(size: int):
+    font_path = find_font_path()
+    if font_path:
+        try:
+            return ImageFont.truetype(font_path, size=size)
+        except OSError:
+            pass
+    return ImageFont.load_default()
+
+
+def make_title_card(size: Tuple[int, int],
+                    label: str,
+                    subtitle: str,
+                    duration_ms: int) -> Image.Image:
+    width, height = size
+    card = Image.new('RGB', size, (18, 21, 27))
+    draw = ImageDraw.Draw(card)
+    title_font = get_font(max(28, width // 34))
+    subtitle_font = get_font(max(18, width // 56))
+    title = f'Training Milestone: {label}'
+    text_color = (245, 247, 250)
+    accent_color = (0, 255, 255)
+
+    title_box = draw.textbbox((0, 0), title, font=title_font)
+    subtitle_box = draw.textbbox((0, 0), subtitle, font=subtitle_font)
+    title_x = (width - (title_box[2] - title_box[0])) // 2
+    subtitle_x = (width - (subtitle_box[2] - subtitle_box[0])) // 2
+    center_y = height // 2
+    draw.text((title_x, center_y - 48), title, font=title_font, fill=text_color)
+    draw.text((subtitle_x, center_y + 8), subtitle, font=subtitle_font, fill=(190, 196, 208))
+    draw.rectangle((width // 3, center_y + 54, 2 * width // 3, center_y + 60), fill=accent_color)
+    card.info['duration'] = duration_ms
+    return card
+
+
+def read_gif_frames(gif_path: str, target_size: Optional[Tuple[int, int]] = None) -> List[Image.Image]:
+    frames = []
+    with Image.open(gif_path) as image:
+        for frame_index in range(getattr(image, 'n_frames', 1)):
+            image.seek(frame_index)
+            frame = image.convert('RGB')
+            if target_size is not None and frame.size != target_size:
+                frame = frame.resize(target_size, Image.Resampling.BILINEAR)
+            frame.info['duration'] = image.info.get('duration', 83)
+            frames.append(frame)
+    return frames
+
+
+def stitch_progress_gif(animation_outputs: List[Dict],
+                        output_dir: str,
+                        filename: str = 'training_progress.gif',
+                        title_duration_ms: int = 900,
+                        max_frames_per_clip: int = 90) -> Optional[str]:
+    clips = [
+        item for item in animation_outputs
+        if item.get('gif_path') and os.path.exists(str(item.get('gif_path')))
+    ]
+    if not clips:
+        return None
+
+    progress_dir = os.path.join(output_dir, 'animations')
+    os.makedirs(progress_dir, exist_ok=True)
+    output_path = os.path.join(progress_dir, filename)
+
+    stitched_frames: List[Image.Image] = []
+    target_size = None
+    for clip in clips:
+        gif_path = str(clip['gif_path'])
+        clip_frames = read_gif_frames(gif_path, target_size=target_size)
+        if not clip_frames:
+            continue
+        if target_size is None:
+            target_size = clip_frames[0].size
+
+        if len(clip_frames) > max_frames_per_clip:
+            indices = np.linspace(0, len(clip_frames) - 1, max_frames_per_clip)
+            clip_frames = [clip_frames[int(round(index))] for index in indices]
+
+        label = str(clip.get('label', 'checkpoint'))
+        success_text = 'SUCCESS' if clip.get('success') else 'NOT SUCCESSFUL'
+        reward = float(clip.get('total_reward', 0.0))
+        distance = float(clip.get('final_distance', 0.0))
+        subtitle = f'{success_text} | reward {reward:.1f} | final distance {distance:.1f}'
+        stitched_frames.append(make_title_card(target_size, label, subtitle, title_duration_ms))
+        stitched_frames.extend(clip_frames)
+
+    if not stitched_frames:
+        return None
+
+    durations = [int(frame.info.get('duration', 83)) for frame in stitched_frames]
+    stitched_frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=stitched_frames[1:],
+        duration=durations,
+        loop=0,
+        optimize=False
+    )
+    return output_path
 
 
 def simulate_episode(env: VolcanicAshEnv,
@@ -374,6 +489,12 @@ def main():
                         help='Fallback learning rate used for histories that do not store learning_rates.')
     parser.add_argument('--include-untrained', action='store_true')
     parser.add_argument('--skip-animations', action='store_true')
+    parser.add_argument('--stitch-progress-gif', action='store_true',
+                        help='Concatenate milestone GIFs into one continuous training progress GIF.')
+    parser.add_argument('--progress-gif-name', default='training_progress.gif',
+                        help='Filename for the stitched training progress GIF.')
+    parser.add_argument('--max-frames-per-progress-clip', type=int, default=90,
+                        help='Maximum frames kept from each milestone clip in the stitched GIF.')
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -386,7 +507,8 @@ def main():
         'random_centers_range': list(args.random_centers_range),
         'random_demo_scenes': args.random_demo_scenes,
         'metric_plots': [],
-        'animations': []
+        'animations': [],
+        'stitched_progress_gif': None
     }
 
     history = load_history(args.model_dir)
@@ -433,6 +555,14 @@ def main():
                 ash_decay_rate=args.ash_decay_rate,
                 ash_turbulence_drift=args.ash_turbulence_drift
             ))
+
+    if args.stitch_progress_gif and summary['animations']:
+        summary['stitched_progress_gif'] = stitch_progress_gif(
+            summary['animations'],
+            output_dir=args.output_dir,
+            filename=args.progress_gif_name,
+            max_frames_per_clip=args.max_frames_per_progress_clip
+        )
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
     with open(summary_path, 'w', encoding='utf-8') as f:
