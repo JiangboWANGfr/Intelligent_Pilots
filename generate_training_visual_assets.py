@@ -124,6 +124,11 @@ def checkpoint_episode(path: str) -> int:
     return int(match.group(1))
 
 
+def safe_name(value: str) -> str:
+    sanitized = ''.join(char if char.isalnum() or char in ('-', '_') else '_' for char in value.strip())
+    return sanitized.strip('_') or 'scene'
+
+
 def find_milestone_checkpoints(model_dir: str,
                                max_checkpoints: int,
                                include_final: bool) -> List[Tuple[str, str]]:
@@ -259,7 +264,7 @@ def export_checkpoint_animations(model_dir: str,
             milestone_label=label
         )
         exporter = ValidationAnimationExporter(env.config, env.concentration_map)
-        milestone_dir = os.path.join(output_dir, 'animations', label)
+        milestone_dir = os.path.join(output_dir, 'animations', safe_name(scene_name), label)
         try:
             export_info = exporter.export(
                 path_result,
@@ -324,18 +329,20 @@ def main():
         )
 
     if not args.skip_animations:
-        summary['animations'] = export_checkpoint_animations(
-            model_dir=args.model_dir,
-            output_dir=args.output_dir,
-            config_path=args.config,
-            scene_name=args.scene,
-            cruise_speed=args.cruise_speed,
-            fixed_scene_maps=args.fixed_scene_maps,
-            seed=args.seed,
-            max_steps=args.max_steps,
-            max_checkpoints=args.max_checkpoints,
-            include_untrained=args.include_untrained
-        )
+        scene_names = parse_scene_names(args.scene) or [args.scene]
+        for scene_name in scene_names:
+            summary['animations'].extend(export_checkpoint_animations(
+                model_dir=args.model_dir,
+                output_dir=args.output_dir,
+                config_path=args.config,
+                scene_name=scene_name,
+                cruise_speed=args.cruise_speed,
+                fixed_scene_maps=args.fixed_scene_maps,
+                seed=args.seed,
+                max_steps=args.max_steps,
+                max_checkpoints=args.max_checkpoints,
+                include_untrained=args.include_untrained
+            ))
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
     with open(summary_path, 'w', encoding='utf-8') as f:

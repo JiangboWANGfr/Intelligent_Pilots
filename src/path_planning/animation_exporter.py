@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from src.config.volcanic_ash_config import VolcanicAshConfig
 
@@ -26,6 +26,7 @@ class ValidationAnimationExporter:
             'medium': (255, 165, 0),
             'high': (255, 0, 0)
         }
+        self.font_path = self._find_font_path()
 
     def export(self,
                path_result: Dict,
@@ -120,10 +121,11 @@ class ValidationAnimationExporter:
     def _build_colored_map(self, render_scale: int) -> np.ndarray:
         map_array = self.concentration_map
         rgb = np.full((map_array.shape[0], map_array.shape[1], 3), self.background_rgb, dtype=np.uint8)
-        safe_mask = (map_array >= 0.02) & (map_array < 0.2)
-        low_mask = (map_array >= 0.2) & (map_array < 0.5)
-        medium_mask = (map_array >= 0.5) & (map_array < 0.8)
-        high_mask = map_array >= 0.8
+        threshold = float(getattr(self.config, 'concentration_threshold', 0.3))
+        safe_mask = (map_array >= threshold * 0.15) & (map_array < threshold * 0.5)
+        low_mask = (map_array >= threshold * 0.5) & (map_array < threshold)
+        medium_mask = (map_array >= threshold) & (map_array < threshold * 1.5)
+        high_mask = map_array >= threshold * 1.5
         rgb[safe_mask] = self.level_colors_rgb['safe']
         rgb[low_mask] = self.level_colors_rgb['low']
         rgb[medium_mask] = self.level_colors_rgb['medium']
@@ -160,7 +162,7 @@ class ValidationAnimationExporter:
 
         if len(visible_points) >= 2:
             polyline = np.array(visible_points, dtype=np.int32).reshape((-1, 1, 2))
-            cv2.polylines(canvas, [polyline], False, self._bgr(self.level_colors_rgb['trace']), thickness=4, lineType=cv2.LINE_AA)
+            cv2.polylines(canvas, [polyline], False, self.level_colors_rgb['trace'], thickness=4, lineType=cv2.LINE_AA)
 
         if visible_points:
             self._draw_aircraft(canvas, visible_points, waypoint_index)
@@ -191,7 +193,7 @@ class ValidationAnimationExporter:
         bar_bottom = map_height - 10
         cv2.rectangle(canvas, (bar_left, bar_top), (bar_right, bar_bottom), (35, 35, 35), thickness=-1)
         filled_right = int(round(bar_left + (bar_right - bar_left) * np.clip(progress / 100.0, 0.0, 1.0)))
-        cv2.rectangle(canvas, (bar_left, bar_top), (filled_right, bar_bottom), self._bgr(self.level_colors_rgb['trace']), thickness=-1)
+        cv2.rectangle(canvas, (bar_left, bar_top), (filled_right, bar_bottom), self.level_colors_rgb['trace'], thickness=-1)
         cv2.rectangle(canvas, (bar_left, bar_top), (bar_right, bar_bottom), (220, 220, 220), thickness=1)
 
     def _draw_side_panel(self,
@@ -209,10 +211,10 @@ class ValidationAnimationExporter:
         info = path_result.get('validation_info', {})
         text_color = (240, 240, 240)
         sub_color = (184, 184, 184)
-        accent_color = self._bgr(self.level_colors_rgb['trace'])
+        accent_color = self.level_colors_rgb['trace']
         x = panel_left + 18
         y = 34
-        cv2.putText(canvas, 'Validation Animation', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.82, accent_color, 2, cv2.LINE_AA)
+        self._draw_text(canvas, 'Validation Animation', (x, y - 20), font_size=25, color=accent_color)
         y += 30
         scene_name = str(path_result.get('scene_name', self.config.scene_name or self.config.model_type))
         method = str(path_result.get('planning_method', 'rl')).upper()
@@ -232,38 +234,42 @@ class ValidationAnimationExporter:
         ]
 
         for label, value in lines:
-            cv2.putText(canvas, label, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.48, sub_color, 1, cv2.LINE_AA)
+            self._draw_text(canvas, label, (x, y - 14), font_size=15, color=sub_color)
             y += 18
             display_value = str(value)
             wrapped = self._wrap_text(display_value, width=25)
             for part in wrapped:
-                cv2.putText(canvas, part, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.56, text_color, 1, cv2.LINE_AA)
+                self._draw_text(canvas, part, (x, y - 16), font_size=17, color=text_color)
                 y += 20
             y += 10
 
-        cv2.putText(canvas, 'Legend', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, accent_color, 2, cv2.LINE_AA)
+        self._draw_text(canvas, 'Legend', (x, y - 18), font_size=19, color=accent_color)
         y += 24
+        threshold = float(getattr(self.config, 'concentration_threshold', 0.3))
         legend_items = [
-            ('Safe 0.02-0.2', self.level_colors_rgb['safe']),
-            ('Low 0.2-0.5', self.level_colors_rgb['low']),
-            ('Medium 0.5-0.8', self.level_colors_rgb['medium']),
-            ('High 0.8-1.0', self.level_colors_rgb['high']),
+            (f'Safe {threshold * 0.15:.2f}-{threshold * 0.5:.2f}', self.level_colors_rgb['safe']),
+            (f'Low {threshold * 0.5:.2f}-{threshold:.2f}', self.level_colors_rgb['low']),
+            (f'Medium {threshold:.2f}-{threshold * 1.5:.2f}', self.level_colors_rgb['medium']),
+            (f'High >= {threshold * 1.5:.2f}', self.level_colors_rgb['high']),
             ('Flight Trace', self.level_colors_rgb['trace'])
         ]
         for text, color in legend_items:
-            cv2.rectangle(canvas, (x, y - 12), (x + 18, y + 6), self._bgr(color), thickness=-1)
+            cv2.rectangle(canvas, (x, y - 12), (x + 18, y + 6), color, thickness=-1)
             cv2.rectangle(canvas, (x, y - 12), (x + 18, y + 6), (230, 230, 230), thickness=1)
-            cv2.putText(canvas, text, (x + 28, y + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1, cv2.LINE_AA)
+            self._draw_text(canvas, text, (x + 28, y - 13), font_size=15, color=text_color)
             y += 26
 
     def _draw_marker(self, canvas: np.ndarray, point: Tuple[int, int], color_rgb: Tuple[int, int, int], label: str):
-        cv2.circle(canvas, point, 8, self._bgr(color_rgb), thickness=-1)
+        cv2.circle(canvas, point, 8, color_rgb, thickness=-1)
         cv2.circle(canvas, point, 11, (255, 255, 255), thickness=2)
-        cv2.putText(canvas, label, (point[0] + 10, point[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+        self._draw_label_near_point(canvas, label, point, color=(25, 25, 25))
 
     def _draw_target_marker(self, canvas: np.ndarray, point: Tuple[int, int], color_rgb: Tuple[int, int, int]):
-        cv2.drawMarker(canvas, point, self._bgr(color_rgb), markerType=cv2.MARKER_TILTED_CROSS, markerSize=18, thickness=3, line_type=cv2.LINE_AA)
-        cv2.putText(canvas, 'TARGET', (point[0] + 10, point[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.circle(canvas, point, 13, (255, 255, 255), thickness=-1, lineType=cv2.LINE_AA)
+        cv2.circle(canvas, point, 9, color_rgb, thickness=3, lineType=cv2.LINE_AA)
+        cv2.drawMarker(canvas, point, color_rgb, markerType=cv2.MARKER_TILTED_CROSS,
+                       markerSize=24, thickness=4, line_type=cv2.LINE_AA)
+        self._draw_label_near_point(canvas, 'TARGET', point, color=(25, 25, 25))
 
     def _draw_aircraft(self, canvas: np.ndarray, visible_points: Sequence[Tuple[int, int]], waypoint_index: int):
         current = np.array(visible_points[-1], dtype=np.float32)
@@ -283,7 +289,7 @@ class ValidationAnimationExporter:
         left = rear_center + normal * 8.0
         right = rear_center - normal * 8.0
         shape = np.array([tip, left, right], dtype=np.int32)
-        cv2.fillConvexPoly(canvas, shape, self._bgr(self.level_colors_rgb['aircraft']), lineType=cv2.LINE_AA)
+        cv2.fillConvexPoly(canvas, shape, self.level_colors_rgb['aircraft'], lineType=cv2.LINE_AA)
         cv2.polylines(canvas, [shape.reshape((-1, 1, 2))], True, (255, 255, 255), thickness=2, lineType=cv2.LINE_AA)
         cv2.circle(canvas, tuple(np.round(current).astype(int)), 3, (255, 255, 255), thickness=-1)
 
@@ -340,5 +346,42 @@ class ValidationAnimationExporter:
             start += width
         return wrapped
 
-    def _bgr(self, rgb: Tuple[int, int, int]) -> Tuple[int, int, int]:
-        return int(rgb[2]), int(rgb[1]), int(rgb[0])
+    def _find_font_path(self) -> Optional[str]:
+        candidates = [
+            '/System/Library/Fonts/PingFang.ttc',
+            '/System/Library/Fonts/STHeiti Light.ttc',
+            '/Library/Fonts/Arial Unicode.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return None
+
+    def _get_font(self, size: int):
+        if self.font_path:
+            try:
+                return ImageFont.truetype(self.font_path, size=size)
+            except OSError:
+                pass
+        return ImageFont.load_default()
+
+    def _draw_text(self,
+                   canvas: np.ndarray,
+                   text: str,
+                   position: Tuple[int, int],
+                   font_size: int,
+                   color: Tuple[int, int, int]):
+        image = Image.fromarray(canvas)
+        draw = ImageDraw.Draw(image)
+        draw.text(position, text, font=self._get_font(font_size), fill=tuple(color))
+        canvas[:] = np.asarray(image)
+
+    def _draw_label_near_point(self,
+                               canvas: np.ndarray,
+                               label: str,
+                               point: Tuple[int, int],
+                               color: Tuple[int, int, int]):
+        x = min(max(point[0] + 12, 4), canvas.shape[1] - 90)
+        y = min(max(point[1] - 24, 4), canvas.shape[0] - 24)
+        self._draw_text(canvas, label, (x, y), font_size=16, color=color)
