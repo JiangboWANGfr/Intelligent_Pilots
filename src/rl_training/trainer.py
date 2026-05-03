@@ -36,6 +36,7 @@ class Trainer:
                  bc_regularization_steps: int = 0,
                  expert_gain: float = 1.0,
                  imitation_only: bool = False,
+                 checkpoint_interval: int = 100,
                  scene_configs: Optional[List[VolcanicAshConfig]] = None):
         
         self.config = config
@@ -53,6 +54,7 @@ class Trainer:
         self.bc_regularization_steps = bc_regularization_steps
         self.expert_gain = expert_gain
         self.imitation_only = imitation_only
+        self.checkpoint_interval = max(0, int(checkpoint_interval))
         self.expert_states = None
         self.expert_actions = None
         
@@ -110,6 +112,7 @@ class Trainer:
             'bc_regularization_steps': self.bc_regularization_steps,
             'expert_gain': self.expert_gain,
             'imitation_only': self.imitation_only,
+            'checkpoint_interval': self.checkpoint_interval,
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
     
@@ -312,7 +315,7 @@ class Trainer:
                     steps=self.bc_regularization_steps
                 )
             
-            if (episode + 1) % 100 == 0:
+            if self.checkpoint_interval > 0 and (episode + 1) % self.checkpoint_interval == 0:
                 self.save_checkpoint(episode + 1)
         
         final_model_path = os.path.join(self.save_dir, 'final_model.pth')

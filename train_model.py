@@ -261,6 +261,8 @@ def main():
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
     parser.add_argument('--log-interval', type=int, default=50)
+    parser.add_argument('--checkpoint-interval', type=int, default=100,
+                        help='Save checkpoint every N episodes. Use 0 to disable periodic checkpoints.')
     args = parser.parse_args()
 
     print('=' * 70)
@@ -275,6 +277,7 @@ def main():
     print(f'  - Batch size: {args.batch_size}')
     print(f'  - Buffer size: {args.buffer_size}')
     print(f'  - Update every: {args.update_every} steps')
+    print(f'  - Checkpoint interval: {args.checkpoint_interval} episodes')
     print(f'  - Device: {args.device}')
     print(f'  - Expert warmup episodes: {args.expert_warmup_episodes}')
     print(f'  - Behavior clone steps: {args.behavior_clone_steps}')
@@ -374,6 +377,7 @@ def main():
         bc_regularization_steps=args.bc_regularization_steps,
         expert_gain=args.expert_gain,
         imitation_only=args.imitation_only,
+        checkpoint_interval=args.checkpoint_interval,
         device=args.device,
         save_dir=args.save_dir,
         scene_configs=scene_configs
