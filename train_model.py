@@ -3,12 +3,16 @@ import os
 import sys
 from typing import List, Optional
 
+import cv2
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 os.makedirs('output/mpl_cache', exist_ok=True)
 os.environ.setdefault('MPLCONFIGDIR', 'output/mpl_cache')
 
 from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs, get_preset_configs
+from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.trainer import Trainer
 
 
@@ -72,6 +76,90 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
 
 
+def safe_filename(name: str) -> str:
+    safe_chars = []
+    for char in name:
+        if char.isalnum() or char in ('-', '_'):
+            safe_chars.append(char)
+        else:
+            safe_chars.append('_')
+    return ''.join(safe_chars).strip('_') or 'scene'
+
+
+def save_pretraining_ash_images(config: VolcanicAshConfig,
+                                scene_configs: List[VolcanicAshConfig],
+                                save_dir: str,
+                                seed: int = 2026) -> None:
+    preview_dir = os.path.join(save_dir, 'pre_training_ash_maps')
+    os.makedirs(preview_dir, exist_ok=True)
+
+    preview_env = VolcanicAshEnv(config, scene_configs=scene_configs)
+    preview_env.max_steps = 1
+    summary = []
+
+    for index, scene_config in enumerate(scene_configs):
+        _, info = preview_env.reset(seed=seed + index)
+        scene_name = info.get('scene_name', preview_env.scene_name)
+        filename_prefix = f'{index + 1:02d}_{safe_filename(scene_name)}'
+
+        concentration_map = np.asarray(preview_env.concentration_map, dtype=np.float32)
+        grayscale = preview_env.ash_model.generate_grayscale_image(concentration_map)
+        danger_rgb = preview_env.ash_model.generate_danger_zone_image(concentration_map)
+
+        grayscale_path = os.path.join(preview_dir, f'{filename_prefix}_concentration.png')
+        danger_path = os.path.join(preview_dir, f'{filename_prefix}_danger.png')
+        overlay_path = os.path.join(preview_dir, f'{filename_prefix}_path_overlay.png')
+
+        cv2.imwrite(grayscale_path, grayscale)
+        cv2.imwrite(danger_path, cv2.cvtColor(danger_rgb, cv2.COLOR_RGB2BGR))
+
+        overlay_rgb = cv2.applyColorMap(grayscale, cv2.COLORMAP_INFERNO)
+        overlay_rgb = cv2.cvtColor(overlay_rgb, cv2.COLOR_BGR2RGB)
+        danger_mask = concentration_map >= preview_env.danger_threshold
+        safety_mask = concentration_map >= preview_env.safety_threshold
+        overlay_rgb[safety_mask] = (
+            0.65 * overlay_rgb[safety_mask] + 0.35 * np.array([255, 165, 0])
+        ).astype(np.uint8)
+        overlay_rgb[danger_mask] = (
+            0.45 * overlay_rgb[danger_mask] + 0.55 * np.array([255, 0, 0])
+        ).astype(np.uint8)
+
+        if preview_env.reference_path is not None and len(preview_env.reference_path) > 1:
+            path_points = np.round(preview_env.reference_path[:, [1, 0]]).astype(np.int32)
+            cv2.polylines(
+                overlay_rgb,
+                [path_points],
+                isClosed=False,
+                color=(0, 255, 255),
+                thickness=2,
+                lineType=cv2.LINE_AA
+            )
+
+        start_xy = tuple(np.round(preview_env.aircraft_pos[[1, 0]]).astype(int).tolist())
+        target_xy = tuple(np.round(preview_env.target_pos[[1, 0]]).astype(int).tolist())
+        cv2.circle(overlay_rgb, start_xy, 5, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+        cv2.circle(overlay_rgb, target_xy, 5, (0, 128, 255), -1, lineType=cv2.LINE_AA)
+        cv2.imwrite(overlay_path, cv2.cvtColor(overlay_rgb, cv2.COLOR_RGB2BGR))
+
+        summary.append({
+            'scene_name': scene_name,
+            'concentration_path': grayscale_path,
+            'danger_path': danger_path,
+            'path_overlay_path': overlay_path,
+            'max_concentration': float(np.max(concentration_map)),
+            'mean_concentration': float(np.mean(concentration_map)),
+            'safety_threshold': float(preview_env.safety_threshold),
+            'danger_threshold': float(preview_env.danger_threshold)
+        })
+
+    summary_path = os.path.join(preview_dir, 'pre_training_ash_maps.json')
+    import json
+    with open(summary_path, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    print(f'Pre-training ash cloud images saved to: {preview_dir}')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train the volcanic ash avoidance RL model.')
     parser.add_argument('--config', default='output/current_config.json',
@@ -118,6 +206,8 @@ def main():
                         help='Pure-pursuit expert turn gain used for warmup.')
     parser.add_argument('--imitation-only', action='store_true',
                         help='Only run expert warmup and behavior cloning, then save the actor.')
+    parser.add_argument('--skip-pretraining-ash-images', action='store_true',
+                        help='Do not save pre-training ash cloud preview images.')
     parser.add_argument('--save-dir', default='models')
     parser.add_argument('--load-model', default=None,
                         help='Optional checkpoint to continue training from.')
@@ -175,6 +265,10 @@ def main():
     for scene in scene_configs:
         print(f'    - {scene.scene_name or scene.model_type}')
     print()
+
+    if not args.skip_pretraining_ash_images:
+        save_pretraining_ash_images(config, scene_configs, args.save_dir)
+        print()
 
     trainer = Trainer(
         config=config,
