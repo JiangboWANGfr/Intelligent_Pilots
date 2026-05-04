@@ -263,6 +263,14 @@ def main():
     parser.add_argument('--log-interval', type=int, default=50)
     parser.add_argument('--checkpoint-interval', type=int, default=100,
                         help='Save checkpoint every N episodes. Use 0 to disable periodic checkpoints.')
+    parser.add_argument('--live-preview', action='store_true',
+                        help='Show a live OpenCV window with the current policy on a fixed preview scene.')
+    parser.add_argument('--preview-interval', type=int, default=50,
+                        help='Refresh the live preview every N training episodes.')
+    parser.add_argument('--preview-steps', type=int, default=220,
+                        help='Maximum rollout steps used in the live preview scene.')
+    parser.add_argument('--preview-seed', type=int, default=2026,
+                        help='Fixed seed for the live preview scene.')
     args = parser.parse_args()
 
     print('=' * 70)
@@ -278,6 +286,10 @@ def main():
     print(f'  - Buffer size: {args.buffer_size}')
     print(f'  - Update every: {args.update_every} steps')
     print(f'  - Checkpoint interval: {args.checkpoint_interval} episodes')
+    print(f'  - Live preview: {args.live_preview}')
+    if args.live_preview:
+        print(f'  - Preview interval: {args.preview_interval} episodes')
+        print(f'  - Preview seed: {args.preview_seed}')
     print(f'  - Device: {args.device}')
     print(f'  - Expert warmup episodes: {args.expert_warmup_episodes}')
     print(f'  - Behavior clone steps: {args.behavior_clone_steps}')
@@ -378,6 +390,10 @@ def main():
         expert_gain=args.expert_gain,
         imitation_only=args.imitation_only,
         checkpoint_interval=args.checkpoint_interval,
+        live_preview=args.live_preview,
+        preview_interval=args.preview_interval,
+        preview_steps=args.preview_steps,
+        preview_seed=args.preview_seed,
         device=args.device,
         save_dir=args.save_dir,
         scene_configs=scene_configs

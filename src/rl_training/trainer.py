@@ -7,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from collections import deque
+from copy import deepcopy
 
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.ddpg_agent import DDPGAgent, create_agent
@@ -37,6 +38,10 @@ class Trainer:
                  expert_gain: float = 1.0,
                  imitation_only: bool = False,
                  checkpoint_interval: int = 100,
+                 live_preview: bool = False,
+                 preview_interval: int = 50,
+                 preview_steps: int = 220,
+                 preview_seed: int = 2026,
                  scene_configs: Optional[List[VolcanicAshConfig]] = None):
         
         self.config = config
@@ -55,6 +60,13 @@ class Trainer:
         self.expert_gain = expert_gain
         self.imitation_only = imitation_only
         self.checkpoint_interval = max(0, int(checkpoint_interval))
+        self.live_preview = bool(live_preview)
+        self.preview_interval = max(1, int(preview_interval))
+        self.preview_steps = max(1, int(preview_steps))
+        self.preview_seed = int(preview_seed)
+        self.preview_env = None
+        self.preview_window_name = 'Training Preview'
+        self.preview_available = self.live_preview
         self.expert_states = None
         self.expert_actions = None
         
@@ -62,6 +74,16 @@ class Trainer:
         
         self.env = VolcanicAshEnv(config, render_mode=None, scene_configs=self.scene_configs)
         self.env.max_steps = max_steps_per_episode
+        if self.live_preview:
+            self.preview_env = VolcanicAshEnv(
+                VolcanicAshConfig.from_dict(config.to_dict()),
+                render_mode=None,
+                scene_configs=[
+                    VolcanicAshConfig.from_dict(scene.to_dict())
+                    for scene in self.scene_configs
+                ]
+            )
+            self.preview_env.max_steps = self.preview_steps
         
         state_dim = self._calculate_state_dim()
         action_dim = int(np.prod(self.env.action_space.shape))
@@ -113,6 +135,10 @@ class Trainer:
             'expert_gain': self.expert_gain,
             'imitation_only': self.imitation_only,
             'checkpoint_interval': self.checkpoint_interval,
+            'live_preview': self.live_preview,
+            'preview_interval': self.preview_interval,
+            'preview_steps': self.preview_steps,
+            'preview_seed': self.preview_seed,
             'training_scene_names': [scene.scene_name or scene.model_type for scene in self.scene_configs]
         }
     
@@ -183,6 +209,132 @@ class Trainer:
             self.agent.actor_optimizer.step()
 
         DDPGAgent.hard_update(self.agent.actor_target, self.agent.actor)
+
+    def _build_preview_frame(self,
+                             episode: int,
+                             episode_reward: float,
+                             success_rate: float,
+                             path_points: List[np.ndarray],
+                             info: Dict,
+                             success: bool) -> np.ndarray:
+        import cv2
+
+        env = self.preview_env
+        concentration_map = np.asarray(env.concentration_map, dtype=np.float32)
+        threshold = float(env.safety_threshold)
+        frame = np.full((env.height, env.width, 3), (245, 247, 250), dtype=np.uint8)
+        trace_mask = (concentration_map >= threshold * 0.15) & (concentration_map < threshold * 0.5)
+        low_mask = (concentration_map >= threshold * 0.5) & (concentration_map < threshold)
+        medium_mask = (concentration_map >= threshold) & (concentration_map < threshold * 1.5)
+        high_mask = concentration_map >= threshold * 1.5
+        frame[trace_mask] = (0, 255, 0)
+        frame[low_mask] = (255, 255, 0)
+        frame[medium_mask] = (255, 165, 0)
+        frame[high_mask] = (255, 0, 0)
+
+        if env.reference_path is not None and len(env.reference_path) > 1:
+            ref_points = np.round(env.reference_path[:, [1, 0]]).astype(np.int32)
+            cv2.polylines(frame, [ref_points], False, (255, 255, 255), 2, cv2.LINE_AA)
+
+        if len(path_points) > 1:
+            trajectory = np.round(np.asarray(path_points)[:, [1, 0]]).astype(np.int32)
+            cv2.polylines(frame, [trajectory], False, (0, 255, 255), 3, cv2.LINE_AA)
+
+        start_xy = tuple(np.round(path_points[0][[1, 0]]).astype(int).tolist())
+        aircraft_xy = tuple(np.round(env.aircraft_pos[[1, 0]]).astype(int).tolist())
+        target_xy = tuple(np.round(env.target_pos[[1, 0]]).astype(int).tolist())
+        cv2.circle(frame, start_xy, 6, (0, 160, 80), -1, cv2.LINE_AA)
+        cv2.circle(frame, target_xy, 10, (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.drawMarker(frame, target_xy, (0, 0, 255), cv2.MARKER_TILTED_CROSS, 22, 3, cv2.LINE_AA)
+        cv2.drawMarker(frame, aircraft_xy, (255, 255, 255), cv2.MARKER_TRIANGLE_UP, 22, 3, cv2.LINE_AA)
+        cv2.drawMarker(frame, aircraft_xy, (0, 255, 255), cv2.MARKER_TRIANGLE_UP, 18, 2, cv2.LINE_AA)
+
+        panel_width = 360
+        scale = 2
+        frame = cv2.resize(frame, (env.width * scale, env.height * scale), interpolation=cv2.INTER_NEAREST)
+        canvas = np.full((frame.shape[0], frame.shape[1] + panel_width, 3), 24, dtype=np.uint8)
+        canvas[:, :frame.shape[1]] = frame
+
+        x = frame.shape[1] + 18
+        y = 36
+        lines = [
+            f'Episode: {episode + 1}/{self.num_episodes}',
+            f'Preview: {"SUCCESS" if success else "NOT SUCCESS"}',
+            f'Train reward: {episode_reward:.1f}',
+            f'Train success: {success_rate:.1f}%',
+            f'Final distance: {float(info.get("distance_to_target", 0.0)):.1f}',
+            f'Ash exposure: {float(info.get("ash_exposure", 0.0)):.2f}',
+            f'Path progress: {float(info.get("path_progress_ratio", 0.0)):.2f}',
+            f'Max conc: {float(info.get("max_concentration_exposure", 0.0)):.3f}',
+            f'Scene: {env.scene_name[:22]}'
+        ]
+        cv2.putText(canvas, 'Live Training Preview', (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.72, (0, 255, 255), 2, cv2.LINE_AA)
+        y += 42
+        for line in lines:
+            cv2.putText(canvas, line, (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55, (235, 235, 235), 1, cv2.LINE_AA)
+            y += 30
+
+        legend = [
+            ('Safe trace', (0, 255, 0)),
+            ('Low', (255, 255, 0)),
+            ('Medium', (255, 165, 0)),
+            ('High', (255, 0, 0)),
+            ('Flight', (0, 255, 255))
+        ]
+        y += 10
+        for label, color in legend:
+            cv2.rectangle(canvas, (x, y - 14), (x + 22, y + 4), color, -1)
+            cv2.putText(canvas, label, (x + 32, y), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (235, 235, 235), 1, cv2.LINE_AA)
+            y += 26
+
+        return canvas
+
+    def _update_live_preview(self,
+                             episode: int,
+                             episode_reward: float,
+                             success_rate: float):
+        if not self.preview_available or self.preview_env is None:
+            return
+
+        try:
+            import cv2
+            if hasattr(self.preview_env, 'random_scene_counter'):
+                self.preview_env.random_scene_counter = 0
+            state, info = self.preview_env.reset(seed=self.preview_seed)
+            path_points = [self.preview_env.aircraft_pos.copy()]
+            success = False
+            final_info = info
+
+            for _ in range(self.preview_steps):
+                action = self.agent.select_action(state, evaluate=True)
+                state, _reward, terminated, truncated, final_info = self.preview_env.step(action)
+                path_points.append(self.preview_env.aircraft_pos.copy())
+                if terminated or truncated:
+                    success = bool(
+                        terminated and final_info.get('distance_to_target', float('inf')) <
+                        self.preview_env.success_threshold
+                    )
+                    break
+
+            frame = self._build_preview_frame(
+                episode=episode,
+                episode_reward=episode_reward,
+                success_rate=success_rate,
+                path_points=path_points,
+                info=final_info,
+                success=success
+            )
+            cv2.imshow(self.preview_window_name, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord('q')):
+                self.preview_available = False
+                cv2.destroyWindow(self.preview_window_name)
+        except Exception as exc:
+            self.preview_available = False
+            print(f'Live preview disabled: {exc}')
     
     def train(self, update_every: int = 10, log_interval: int = 10):
         if self.expert_warmup_episodes > 0:
@@ -308,6 +460,13 @@ class Trainer:
                     'Scene': current_scene_name
                 })
 
+            if self.live_preview and episode % self.preview_interval == 0:
+                self._update_live_preview(
+                    episode=episode,
+                    episode_reward=episode_reward,
+                    success_rate=success_rate
+                )
+
             if self.bc_regularization_steps > 0 and self.expert_states is not None:
                 self._behavior_clone_actor(
                     self.expert_states,
@@ -327,6 +486,12 @@ class Trainer:
         print(f"\nTraining completed!")
         print(f"Final model saved to: {final_model_path}")
         print(f"Success rate: {success_count/self.num_episodes*100:.1f}%")
+        if self.preview_available:
+            try:
+                import cv2
+                cv2.destroyWindow(self.preview_window_name)
+            except Exception:
+                pass
         
         return self.agent, self.training_history
     
