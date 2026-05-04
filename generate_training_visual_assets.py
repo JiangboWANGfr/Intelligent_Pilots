@@ -140,9 +140,25 @@ def parse_int_pair(raw: str) -> Tuple[int, int]:
     return lower, upper
 
 
+def parse_episode_list(raw: Optional[str]) -> Optional[List[int]]:
+    if not raw:
+        return None
+    episodes = []
+    for part in raw.split(','):
+        value = part.strip()
+        if not value:
+            continue
+        episode = int(value)
+        if episode < 1:
+            raise argparse.ArgumentTypeError('Checkpoint episodes must be >= 1.')
+        episodes.append(episode)
+    return sorted(set(episodes))
+
+
 def find_milestone_checkpoints(model_dir: str,
                                max_checkpoints: int,
-                               include_final: bool) -> List[Tuple[str, str]]:
+                               include_final: bool,
+                               checkpoint_episodes: Optional[List[int]] = None) -> List[Tuple[str, str]]:
     checkpoint_paths = sorted(
         [
             os.path.join(model_dir, name)
@@ -152,7 +168,27 @@ def find_milestone_checkpoints(model_dir: str,
         key=checkpoint_episode
     )
     selected = []
-    if checkpoint_paths:
+    if checkpoint_episodes:
+        by_episode = {checkpoint_episode(path): path for path in checkpoint_paths}
+        available_episodes = sorted(by_episode.keys())
+        for requested_episode in checkpoint_episodes:
+            path = by_episode.get(requested_episode)
+            if path is None and available_episodes:
+                nearest_episode = min(
+                    available_episodes,
+                    key=lambda episode: abs(episode - requested_episode)
+                )
+                path = by_episode[nearest_episode]
+            if path is not None:
+                selected.append((f'ep{checkpoint_episode(path):04d}', path))
+        seen_paths = set()
+        selected = [
+            item for item in selected
+            if not (item[1] in seen_paths or seen_paths.add(item[1]))
+        ]
+    elif max_checkpoints <= 0:
+        selected = []
+    elif checkpoint_paths:
         indices = np.linspace(0, len(checkpoint_paths) - 1, min(max_checkpoints, len(checkpoint_paths)))
         for index in sorted({int(round(i)) for i in indices}):
             path = checkpoint_paths[index]
@@ -351,6 +387,7 @@ def export_checkpoint_animations(model_dir: str,
                                  seed: int,
                                  max_steps: int,
                                  max_checkpoints: int,
+                                 checkpoint_episodes: Optional[List[int]],
                                  include_untrained: bool,
                                  random_ash_scenes: bool = False,
                                  random_centers_range: Tuple[int, int] = (1, 6),
@@ -402,7 +439,12 @@ def export_checkpoint_animations(model_dir: str,
     milestones = []
     if include_untrained:
         milestones.append(('ep0000_untrained', None))
-    milestones.extend(find_milestone_checkpoints(model_dir, max_checkpoints, include_final=True))
+    milestones.extend(find_milestone_checkpoints(
+        model_dir,
+        max_checkpoints,
+        include_final=True,
+        checkpoint_episodes=checkpoint_episodes
+    ))
 
     outputs = []
     for label, model_path in milestones:
@@ -485,6 +527,8 @@ def main():
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--max-steps', type=int, default=260)
     parser.add_argument('--max-checkpoints', type=int, default=4)
+    parser.add_argument('--checkpoint-episodes', default=None,
+                        help='Comma-separated checkpoint episodes to render, e.g. 1,5,10,25,50,100.')
     parser.add_argument('--learning-rate', type=float, default=None,
                         help='Fallback learning rate used for histories that do not store learning_rates.')
     parser.add_argument('--include-untrained', action='store_true')
@@ -541,6 +585,7 @@ def main():
                 seed=args.seed,
                 max_steps=args.max_steps,
                 max_checkpoints=args.max_checkpoints,
+                checkpoint_episodes=parse_episode_list(args.checkpoint_episodes),
                 include_untrained=args.include_untrained,
                 random_ash_scenes=args.random_ash_scenes,
                 random_centers_range=args.random_centers_range,
