@@ -172,10 +172,23 @@ class ValidationAnimationExporter:
             for point in path_coordinates[:waypoint_index + 1]
         ]
         full_points = [self._canvas_point(point, scale_x, scale_y) for point in path_coordinates]
+        start_coordinate = path_result.get('start_coordinate')
+        target_coordinate = path_result.get('target_coordinate')
+        start_point = (
+            self._canvas_point(start_coordinate, scale_x, scale_y)
+            if start_coordinate is not None
+            else full_points[0] if full_points else None
+        )
+        target_point = (
+            self._canvas_point(target_coordinate, scale_x, scale_y)
+            if target_coordinate is not None
+            else full_points[-1] if full_points else None
+        )
 
-        if full_points:
-            self._draw_marker(canvas, full_points[0], self.level_colors_rgb['start'], 'START')
-            self._draw_target_marker(canvas, full_points[-1], self.level_colors_rgb['target'])
+        if start_point is not None:
+            self._draw_marker(canvas, start_point, self.level_colors_rgb['start'], 'START')
+        if target_point is not None:
+            self._draw_target_marker(canvas, target_point, self.level_colors_rgb['target'])
 
         if len(visible_points) >= 2:
             polyline = np.array(visible_points, dtype=np.int32).reshape((-1, 1, 2))
