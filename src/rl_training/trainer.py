@@ -301,9 +301,14 @@ class Trainer:
 
         try:
             import cv2
+            use_random_preview = self.preview_seed < 0
             if hasattr(self.preview_env, 'random_scene_counter'):
-                self.preview_env.random_scene_counter = 0
-            state, info = self.preview_env.reset(seed=self.preview_seed)
+                if use_random_preview:
+                    self.preview_env.random_scene_counter = episode + 1
+                else:
+                    self.preview_env.random_scene_counter = 0
+            reset_seed = None if use_random_preview else self.preview_seed
+            state, info = self.preview_env.reset(seed=reset_seed)
             path_points = [self.preview_env.aircraft_pos.copy()]
             success = False
             final_info = info

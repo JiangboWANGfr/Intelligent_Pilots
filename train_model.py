@@ -270,7 +270,7 @@ def main():
     parser.add_argument('--preview-steps', type=int, default=220,
                         help='Maximum rollout steps used in the live preview scene.')
     parser.add_argument('--preview-seed', type=int, default=2026,
-                        help='Fixed seed for the live preview scene.')
+                        help='Fixed seed for the live preview scene. Use -1 for a new random preview scene each refresh.')
     args = parser.parse_args()
 
     print('=' * 70)
