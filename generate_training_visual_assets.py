@@ -398,7 +398,8 @@ def export_checkpoint_animations(model_dir: str,
                                  ash_advection_speed: Optional[float] = None,
                                  ash_diffusion_sigma: Optional[float] = None,
                                  ash_decay_rate: Optional[float] = None,
-                                 ash_turbulence_drift: Optional[float] = None) -> List[Dict]:
+                                 ash_turbulence_drift: Optional[float] = None,
+                                 vary_scene_per_checkpoint: bool = False) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
     if dynamic_ash:
         config.enable_dynamic_ash = True
@@ -464,11 +465,17 @@ def export_checkpoint_animations(model_dir: str,
 
         env.scene_cursor = -1
         if hasattr(env, 'random_scene_counter'):
-            env.random_scene_counter = 0
+            if vary_scene_per_checkpoint:
+                env.random_scene_counter = checkpoint_episode(model_path) if model_path else 0
+            else:
+                env.random_scene_counter = 0
+        rollout_seed = seed
+        if vary_scene_per_checkpoint:
+            rollout_seed = seed + (checkpoint_episode(model_path) if model_path else 0)
         path_result = simulate_episode(
             env=env,
             agent=agent,
-            seed=seed,
+            seed=rollout_seed,
             max_steps=max_steps,
             scene_label=scene_name,
             milestone_label=label
@@ -519,6 +526,8 @@ def main():
                         help='Number of deterministic random scenes to render.')
     parser.add_argument('--random-scene-seed', type=int, default=None,
                         help='Base seed for deterministic random demo scenes.')
+    parser.add_argument('--vary-scene-per-checkpoint', action='store_true',
+                        help='Use a different random preview scene for each checkpoint animation.')
     parser.add_argument('--dynamic-ash', action='store_true',
                         help='Render moving ash clouds in checkpoint animations.')
     parser.add_argument('--ash-advection-speed', type=float, default=None,
@@ -552,6 +561,7 @@ def main():
         'dynamic_ash': args.dynamic_ash,
         'random_centers_range': list(args.random_centers_range),
         'random_demo_scenes': args.random_demo_scenes,
+        'vary_scene_per_checkpoint': args.vary_scene_per_checkpoint,
         'metric_plots': [],
         'animations': [],
         'stitched_progress_gif': None
@@ -600,7 +610,8 @@ def main():
                 ash_advection_speed=args.ash_advection_speed,
                 ash_diffusion_sigma=args.ash_diffusion_sigma,
                 ash_decay_rate=args.ash_decay_rate,
-                ash_turbulence_drift=args.ash_turbulence_drift
+                ash_turbulence_drift=args.ash_turbulence_drift,
+                vary_scene_per_checkpoint=args.vary_scene_per_checkpoint
             ))
 
     if args.stitch_progress_gif and summary['animations']:
