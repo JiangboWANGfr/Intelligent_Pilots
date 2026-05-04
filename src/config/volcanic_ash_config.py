@@ -49,6 +49,14 @@ class VolcanicAshConfig:
     ash_avoidance_activation_ratio: float = 0.6
     airport_safety_threshold_ratio: float = 0.35
     airport_clearance_radius: float = 35.0
+    departure_cloud_clearance_radius: float = 130.0
+    arrival_cloud_clearance_radius: float = 100.0
+    initial_clear_path_distance: float = 120.0
+    initial_clear_concentration_ratio: float = 0.2
+    safety_factor_mode: str = "random"
+    fixed_safety_factor: float = 1.0
+    min_safety_factor: float = 0.6
+    max_safety_factor: float = 1.8
     centers: List[Dict] = None
     scene_name: str = ""
     training_scene_names: List[str] = None
@@ -91,6 +99,14 @@ class VolcanicAshConfig:
     ash_turbulence_drift: float = 0.25
     ash_dynamic_update_interval: int = 1
     ash_dynamic_renormalize: bool = False
+    ash_advection_speed_min: float = 0.25
+    ash_advection_speed_max: float = 0.7
+    ash_wind_direction_jitter_deg: float = 18.0
+    ash_wind_speed_jitter_ratio: float = 0.35
+    ash_wind_smoothness: float = 0.96
+    ash_rotation_enabled: bool = True
+    ash_rotation_rate_deg: float = 0.25
+    ash_rotation_jitter_deg: float = 0.1
     
     def __post_init__(self):
         if self.centers is None:
@@ -125,6 +141,14 @@ class VolcanicAshConfig:
             'ash_avoidance_activation_ratio': self.ash_avoidance_activation_ratio,
             'airport_safety_threshold_ratio': self.airport_safety_threshold_ratio,
             'airport_clearance_radius': self.airport_clearance_radius,
+            'departure_cloud_clearance_radius': self.departure_cloud_clearance_radius,
+            'arrival_cloud_clearance_radius': self.arrival_cloud_clearance_radius,
+            'initial_clear_path_distance': self.initial_clear_path_distance,
+            'initial_clear_concentration_ratio': self.initial_clear_concentration_ratio,
+            'safety_factor_mode': self.safety_factor_mode,
+            'fixed_safety_factor': self.fixed_safety_factor,
+            'min_safety_factor': self.min_safety_factor,
+            'max_safety_factor': self.max_safety_factor,
             'centers': self.centers,
             'scene_name': self.scene_name,
             'training_scene_names': self.training_scene_names,
@@ -164,7 +188,15 @@ class VolcanicAshConfig:
             'ash_decay_rate': self.ash_decay_rate,
             'ash_turbulence_drift': self.ash_turbulence_drift,
             'ash_dynamic_update_interval': self.ash_dynamic_update_interval,
-            'ash_dynamic_renormalize': self.ash_dynamic_renormalize
+            'ash_dynamic_renormalize': self.ash_dynamic_renormalize,
+            'ash_advection_speed_min': self.ash_advection_speed_min,
+            'ash_advection_speed_max': self.ash_advection_speed_max,
+            'ash_wind_direction_jitter_deg': self.ash_wind_direction_jitter_deg,
+            'ash_wind_speed_jitter_ratio': self.ash_wind_speed_jitter_ratio,
+            'ash_wind_smoothness': self.ash_wind_smoothness,
+            'ash_rotation_enabled': self.ash_rotation_enabled,
+            'ash_rotation_rate_deg': self.ash_rotation_rate_deg,
+            'ash_rotation_jitter_deg': self.ash_rotation_jitter_deg
         }
     
     @classmethod

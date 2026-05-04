@@ -123,6 +123,7 @@ class Trainer:
             'path_progress_ratios': [],
             'cross_track_errors': [],
             'final_distances': [],
+            'safety_factors': [],
             'termination_reasons': [],
             'scene_names': [],
             'algorithm': self.algorithm,
@@ -455,6 +456,7 @@ class Trainer:
             self.training_history['path_progress_ratios'].append(float(final_info.get('path_progress_ratio', 0.0)))
             self.training_history['cross_track_errors'].append(float(np.mean(cross_track_errors)))
             self.training_history['final_distances'].append(float(final_info.get('distance_to_target', 0.0)))
+            self.training_history['safety_factors'].append(float(final_info.get('safety_factor', 1.0)))
             self.training_history['termination_reasons'].append(termination_reason)
             self.training_history['scene_names'].append(current_scene_name)
             

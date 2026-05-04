@@ -155,6 +155,7 @@ class DDPGAgent:
         state_list.extend(state_dict['heading_vec'])
         speed_value = state_dict.get('cruise_speed', state_dict.get('speed'))
         state_list.extend(speed_value)
+        state_list.extend(state_dict.get('safety_factor', [0.5]))
         state_list.extend(state_dict['distance_to_target'])
         state_list.extend(state_dict['current_concentration'])
         state_list.extend(state_dict['forward_concentration'])

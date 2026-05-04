@@ -32,6 +32,16 @@ def parse_int_pair(raw: str):
     return lower, upper
 
 
+def parse_float_pair(raw: str):
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated values, e.g. 0.25,0.7.')
+    lower, upper = float(parts[0]), float(parts[1])
+    if upper < lower:
+        raise argparse.ArgumentTypeError('Expected a valid range with min <= max.')
+    return lower, upper
+
+
 def load_config(config_path: str, fallback_preset: str) -> VolcanicAshConfig:
     if os.path.exists(config_path):
         config = VolcanicAshConfig.load(config_path)
@@ -94,6 +104,14 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
         scene.airport_safety_threshold_ratio = config.airport_safety_threshold_ratio
         scene.airport_clearance_radius = config.airport_clearance_radius
+        scene.departure_cloud_clearance_radius = config.departure_cloud_clearance_radius
+        scene.arrival_cloud_clearance_radius = config.arrival_cloud_clearance_radius
+        scene.initial_clear_path_distance = config.initial_clear_path_distance
+        scene.initial_clear_concentration_ratio = config.initial_clear_concentration_ratio
+        scene.safety_factor_mode = config.safety_factor_mode
+        scene.fixed_safety_factor = config.fixed_safety_factor
+        scene.min_safety_factor = config.min_safety_factor
+        scene.max_safety_factor = config.max_safety_factor
         scene.enable_dynamic_ash = config.enable_dynamic_ash
         scene.ash_advection_speed = config.ash_advection_speed
         scene.ash_diffusion_sigma = config.ash_diffusion_sigma
@@ -101,6 +119,14 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_turbulence_drift = config.ash_turbulence_drift
         scene.ash_dynamic_update_interval = config.ash_dynamic_update_interval
         scene.ash_dynamic_renormalize = config.ash_dynamic_renormalize
+        scene.ash_advection_speed_min = config.ash_advection_speed_min
+        scene.ash_advection_speed_max = config.ash_advection_speed_max
+        scene.ash_wind_direction_jitter_deg = config.ash_wind_direction_jitter_deg
+        scene.ash_wind_speed_jitter_ratio = config.ash_wind_speed_jitter_ratio
+        scene.ash_wind_smoothness = config.ash_wind_smoothness
+        scene.ash_rotation_enabled = config.ash_rotation_enabled
+        scene.ash_rotation_rate_deg = config.ash_rotation_rate_deg
+        scene.ash_rotation_jitter_deg = config.ash_rotation_jitter_deg
 
 
 def safe_filename(name: str) -> str:
@@ -245,6 +271,18 @@ def main():
                         help='Per-update concentration decay rate for dynamic ash.')
     parser.add_argument('--ash-turbulence-drift', type=float, default=None,
                         help='Per-update turbulent displacement strength in pixels.')
+    parser.add_argument('--ash-advection-speed-range', type=parse_float_pair, default=None,
+                        help='Dynamic ash advection speed range as min,max pixels per step.')
+    parser.add_argument('--departure-cloud-clearance', type=float, default=None,
+                        help='Minimum start distance from visible ash cloud in pixels.')
+    parser.add_argument('--arrival-cloud-clearance', type=float, default=None,
+                        help='Minimum target distance from visible ash cloud in pixels.')
+    parser.add_argument('--initial-clear-path-distance', type=float, default=None,
+                        help='Initial path distance that should remain clear of visible ash.')
+    parser.add_argument('--safety-factor-mode', choices=['fixed', 'random'], default=None)
+    parser.add_argument('--fixed-safety-factor', type=float, default=None)
+    parser.add_argument('--safety-factor-range', type=parse_float_pair, default=None,
+                        help='Safety factor range as min,max. Higher values avoid ash more aggressively.')
     parser.add_argument('--expert-warmup-episodes', type=int, default=0,
                         help='Collect this many pure-pursuit expert episodes before RL training.')
     parser.add_argument('--behavior-clone-steps', type=int, default=0,
@@ -317,6 +355,22 @@ def main():
         config.ash_decay_rate = args.ash_decay_rate
     if args.ash_turbulence_drift is not None:
         config.ash_turbulence_drift = args.ash_turbulence_drift
+    if args.ash_advection_speed_range is not None:
+        config.ash_advection_speed_min = float(args.ash_advection_speed_range[0])
+        config.ash_advection_speed_max = float(args.ash_advection_speed_range[1])
+    if args.departure_cloud_clearance is not None:
+        config.departure_cloud_clearance_radius = args.departure_cloud_clearance
+    if args.arrival_cloud_clearance is not None:
+        config.arrival_cloud_clearance_radius = args.arrival_cloud_clearance
+    if args.initial_clear_path_distance is not None:
+        config.initial_clear_path_distance = args.initial_clear_path_distance
+    if args.safety_factor_mode is not None:
+        config.safety_factor_mode = args.safety_factor_mode
+    if args.fixed_safety_factor is not None:
+        config.fixed_safety_factor = args.fixed_safety_factor
+    if args.safety_factor_range is not None:
+        config.min_safety_factor = float(args.safety_factor_range[0])
+        config.max_safety_factor = float(args.safety_factor_range[1])
     scene_configs = build_scene_configs(
         config,
         scene_names=None if args.random_ash_scenes else parse_scene_names(args.scenes),
@@ -351,6 +405,10 @@ def main():
         print(f'  Ash diffusion sigma: {config.ash_diffusion_sigma}')
         print(f'  Ash decay rate: {config.ash_decay_rate}')
         print(f'  Ash turbulence drift: {config.ash_turbulence_drift} px')
+        print(f'  Ash speed range: {config.ash_advection_speed_min}-{config.ash_advection_speed_max} px/step')
+    print(f'  Departure cloud clearance: {config.departure_cloud_clearance_radius}')
+    print(f'  Initial clear path distance: {config.initial_clear_path_distance}')
+    print(f'  Safety factor: {config.safety_factor_mode} ({config.min_safety_factor}-{config.max_safety_factor})')
     print(f'  Path corridor radius: {config.path_corridor_radius}')
     print(f'  Path planning threshold ratio: {config.path_planning_threshold_ratio}')
     print(f'  Path risk inflation radius: {config.path_risk_inflation_radius}')

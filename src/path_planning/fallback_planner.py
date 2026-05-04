@@ -141,25 +141,30 @@ class FallbackPlanner:
                 clearance_ratio = clearance_risk / safe_threshold
                 excess_ratio = max(0.0, risk - threshold) / safe_threshold
                 clearance_excess_ratio = max(0.0, clearance_risk - threshold) / safe_threshold
+                safety_factor = max(float(getattr(self.config, 'fixed_safety_factor', 1.0)), 0.05)
                 risk_penalty = (
                     1.0
-                    + 6.0 * risk
-                    + 3.0 * risk_ratio ** 2
-                    + 2.0 * clearance_ratio ** 2
+                    + safety_factor * (
+                        6.0 * risk
+                        + 3.0 * risk_ratio ** 2
+                        + 2.0 * clearance_ratio ** 2
+                    )
                 )
                 if clearance_risk > threshold:
-                    risk_penalty += (
+                    risk_penalty += safety_factor * (
                         20.0 * clearance_excess_ratio
                         + 60.0 * clearance_excess_ratio ** 2
                     )
                 if risk > threshold:
-                    risk_penalty += 120.0 * excess_ratio + 600.0 * excess_ratio ** 2
+                    risk_penalty += safety_factor * (
+                        120.0 * excess_ratio + 600.0 * excess_ratio ** 2
+                    )
                 if risk > threshold * 1.5:
-                    risk_penalty += 2000.0
+                    risk_penalty += safety_factor * 2000.0
                 if risk > threshold * 2.0:
-                    risk_penalty += 8000.0
+                    risk_penalty += safety_factor * 8000.0
                 if risk > 0.95:
-                    risk_penalty += 20000.0
+                    risk_penalty += safety_factor * 20000.0
                 if boundary_margin_cells > 0.0:
                     edge_distance = min(
                         next_node[0],

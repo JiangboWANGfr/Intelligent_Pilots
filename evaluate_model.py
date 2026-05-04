@@ -56,6 +56,14 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_avoidance_activation_ratio = config.ash_avoidance_activation_ratio
         scene.airport_safety_threshold_ratio = config.airport_safety_threshold_ratio
         scene.airport_clearance_radius = config.airport_clearance_radius
+        scene.departure_cloud_clearance_radius = config.departure_cloud_clearance_radius
+        scene.arrival_cloud_clearance_radius = config.arrival_cloud_clearance_radius
+        scene.initial_clear_path_distance = config.initial_clear_path_distance
+        scene.initial_clear_concentration_ratio = config.initial_clear_concentration_ratio
+        scene.safety_factor_mode = config.safety_factor_mode
+        scene.fixed_safety_factor = config.fixed_safety_factor
+        scene.min_safety_factor = config.min_safety_factor
+        scene.max_safety_factor = config.max_safety_factor
         scene.enable_dynamic_ash = config.enable_dynamic_ash
         scene.ash_advection_speed = config.ash_advection_speed
         scene.ash_diffusion_sigma = config.ash_diffusion_sigma
@@ -63,6 +71,14 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_turbulence_drift = config.ash_turbulence_drift
         scene.ash_dynamic_update_interval = config.ash_dynamic_update_interval
         scene.ash_dynamic_renormalize = config.ash_dynamic_renormalize
+        scene.ash_advection_speed_min = config.ash_advection_speed_min
+        scene.ash_advection_speed_max = config.ash_advection_speed_max
+        scene.ash_wind_direction_jitter_deg = config.ash_wind_direction_jitter_deg
+        scene.ash_wind_speed_jitter_ratio = config.ash_wind_speed_jitter_ratio
+        scene.ash_wind_smoothness = config.ash_wind_smoothness
+        scene.ash_rotation_enabled = config.ash_rotation_enabled
+        scene.ash_rotation_rate_deg = config.ash_rotation_rate_deg
+        scene.ash_rotation_jitter_deg = config.ash_rotation_jitter_deg
 
 
 def infer_algorithm(model_path: str, requested: str) -> str:

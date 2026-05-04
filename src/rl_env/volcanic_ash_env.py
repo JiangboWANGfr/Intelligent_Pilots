@@ -57,6 +57,15 @@ class VolcanicAshEnv(gym.Env):
         self.ash_avoidance_activation_ratio = 0.6
         self.airport_safety_threshold_ratio = 0.35
         self.airport_clearance_radius = 35.0
+        self.departure_cloud_clearance_radius = 130.0
+        self.arrival_cloud_clearance_radius = 100.0
+        self.initial_clear_path_distance = 120.0
+        self.initial_clear_concentration_ratio = 0.2
+        self.safety_factor = 1.0
+        self.min_safety_factor = 0.6
+        self.max_safety_factor = 1.8
+        self.safety_factor_mode = 'random'
+        self.fixed_safety_factor = 1.0
         self.enable_dynamic_ash = False
         self.ash_advection_speed = 0.8
         self.ash_diffusion_sigma = 0.25
@@ -66,6 +75,18 @@ class VolcanicAshEnv(gym.Env):
         self.ash_dynamic_renormalize = False
         self.ash_dynamic_noise_x = None
         self.ash_dynamic_noise_y = None
+        self.ash_dynamic_wind_direction = 0.0
+        self.ash_dynamic_wind_speed = 0.8
+        self.ash_dynamic_rotation_rate = 0.0
+        self.ash_advection_speed_min = 0.25
+        self.ash_advection_speed_max = 0.7
+        self.ash_wind_direction_jitter_deg = 18.0
+        self.ash_wind_speed_jitter_ratio = 0.35
+        self.ash_wind_smoothness = 0.96
+        self.ash_rotation_enabled = True
+        self.ash_rotation_rate_deg = 0.25
+        self.ash_rotation_jitter_deg = 0.1
+        self.distance_to_cloud = None
         self.safe_airport_mask = None
         self.cruise_speed_mode = 'fixed'
         self._refresh_runtime_parameters()
@@ -121,6 +142,7 @@ class VolcanicAshEnv(gym.Env):
             'goal_vector': spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
             'heading_vec': spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32),
             'cruise_speed': spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
+            'safety_factor': spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
             'distance_to_target': spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
             'current_concentration': spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
             'forward_concentration': spaces.Box(low=0.0, high=1.0,
@@ -189,6 +211,39 @@ class VolcanicAshEnv(gym.Env):
             'airport_clearance_radius',
             35.0
         ))
+        self.departure_cloud_clearance_radius = float(getattr(
+            self.config,
+            'departure_cloud_clearance_radius',
+            130.0
+        ))
+        self.arrival_cloud_clearance_radius = float(getattr(
+            self.config,
+            'arrival_cloud_clearance_radius',
+            100.0
+        ))
+        self.initial_clear_path_distance = float(getattr(
+            self.config,
+            'initial_clear_path_distance',
+            120.0
+        ))
+        self.initial_clear_concentration_ratio = float(getattr(
+            self.config,
+            'initial_clear_concentration_ratio',
+            0.2
+        ))
+        self.safety_factor_mode = str(getattr(
+            self.config,
+            'safety_factor_mode',
+            'random'
+        )).lower()
+        self.fixed_safety_factor = float(getattr(self.config, 'fixed_safety_factor', 1.0))
+        self.min_safety_factor = float(getattr(self.config, 'min_safety_factor', 0.6))
+        self.max_safety_factor = float(getattr(self.config, 'max_safety_factor', 1.8))
+        if self.min_safety_factor > self.max_safety_factor:
+            self.min_safety_factor, self.max_safety_factor = (
+                self.max_safety_factor,
+                self.min_safety_factor
+            )
         self.enable_dynamic_ash = bool(getattr(self.config, 'enable_dynamic_ash', False))
         self.ash_advection_speed = float(getattr(self.config, 'ash_advection_speed', 0.8))
         self.ash_diffusion_sigma = max(0.0, float(getattr(
@@ -216,11 +271,53 @@ class VolcanicAshEnv(gym.Env):
             'ash_dynamic_renormalize',
             False
         ))
+        self.ash_advection_speed_min = float(getattr(
+            self.config,
+            'ash_advection_speed_min',
+            0.25
+        ))
+        self.ash_advection_speed_max = float(getattr(
+            self.config,
+            'ash_advection_speed_max',
+            0.7
+        ))
+        if self.ash_advection_speed_min > self.ash_advection_speed_max:
+            self.ash_advection_speed_min, self.ash_advection_speed_max = (
+                self.ash_advection_speed_max,
+                self.ash_advection_speed_min
+            )
+        self.ash_wind_direction_jitter_deg = float(getattr(
+            self.config,
+            'ash_wind_direction_jitter_deg',
+            18.0
+        ))
+        self.ash_wind_speed_jitter_ratio = max(0.0, float(getattr(
+            self.config,
+            'ash_wind_speed_jitter_ratio',
+            0.35
+        )))
+        self.ash_wind_smoothness = float(np.clip(
+            getattr(self.config, 'ash_wind_smoothness', 0.96),
+            0.0,
+            0.995
+        ))
+        self.ash_rotation_enabled = bool(getattr(self.config, 'ash_rotation_enabled', True))
+        self.ash_rotation_rate_deg = float(getattr(self.config, 'ash_rotation_rate_deg', 0.25))
+        self.ash_rotation_jitter_deg = float(getattr(self.config, 'ash_rotation_jitter_deg', 0.1))
 
     def _select_episode_cruise_speed(self) -> float:
         if self.cruise_speed_mode == 'random':
             return float(self.np_random.uniform(self.min_cruise_speed, self.max_cruise_speed))
         return self.fixed_cruise_speed
+
+    def _select_episode_safety_factor(self) -> float:
+        if self.safety_factor_mode == 'random':
+            return float(self.np_random.uniform(self.min_safety_factor, self.max_safety_factor))
+        return float(np.clip(
+            self.fixed_safety_factor,
+            self.min_safety_factor,
+            self.max_safety_factor
+        ))
 
     def _update_environment_shape(self):
         self._refresh_runtime_parameters()
@@ -273,6 +370,68 @@ class VolcanicAshEnv(gym.Env):
         self.ash_dynamic_noise_y = (
             generator.generate_fast_noise((self.height, self.width), scale=130.0, octaves=3) - 0.5
         ).astype(np.float32)
+        base_speed = float(getattr(self.config, 'ash_advection_speed', self.ash_advection_speed))
+        base_speed = float(np.clip(
+            base_speed,
+            self.ash_advection_speed_min,
+            max(self.ash_advection_speed_max, self.ash_advection_speed_min)
+        ))
+        if self.ash_advection_speed_min < self.ash_advection_speed_max:
+            base_speed = float(self.np_random.uniform(
+                self.ash_advection_speed_min,
+                self.ash_advection_speed_max
+            ))
+        self.ash_dynamic_wind_direction = float(getattr(self.config, 'wind_direction', 0.0))
+        self.ash_dynamic_wind_speed = base_speed
+        rotation_sign = -1.0 if self.np_random.random() < 0.5 else 1.0
+        self.ash_dynamic_rotation_rate = rotation_sign * float(np.deg2rad(self.ash_rotation_rate_deg))
+
+    def _update_dynamic_wind_state(self):
+        smooth = self.ash_wind_smoothness
+        base_direction = float(getattr(self.config, 'wind_direction', 0.0))
+        direction_sample = base_direction + float(self.np_random.normal(
+            0.0,
+            self.ash_wind_direction_jitter_deg
+        ))
+        speed_center = float(np.clip(
+            getattr(self.config, 'ash_advection_speed', self.ash_advection_speed),
+            self.ash_advection_speed_min,
+            max(self.ash_advection_speed_max, self.ash_advection_speed_min)
+        ))
+        speed_sigma = max(speed_center * self.ash_wind_speed_jitter_ratio, 1e-6)
+        speed_sample = float(np.clip(
+            self.np_random.normal(speed_center, speed_sigma),
+            self.ash_advection_speed_min,
+            max(self.ash_advection_speed_max, self.ash_advection_speed_min)
+        ))
+        self.ash_dynamic_wind_direction = (
+            smooth * self.ash_dynamic_wind_direction +
+            (1.0 - smooth) * direction_sample
+        )
+        self.ash_dynamic_wind_speed = (
+            smooth * self.ash_dynamic_wind_speed +
+            (1.0 - smooth) * speed_sample
+        )
+        rotation_sample = np.deg2rad(float(self.np_random.normal(
+            self.ash_rotation_rate_deg,
+            self.ash_rotation_jitter_deg
+        )))
+        if self.ash_dynamic_rotation_rate < 0:
+            rotation_sample *= -1.0
+        self.ash_dynamic_rotation_rate = (
+            smooth * self.ash_dynamic_rotation_rate +
+            (1.0 - smooth) * rotation_sample
+        )
+
+    def _ash_centroid(self, map_array: np.ndarray) -> Tuple[float, float]:
+        weights = np.clip(map_array, 0.0, 1.0)
+        total = float(np.sum(weights))
+        if total <= 1e-6:
+            return self.height / 2.0, self.width / 2.0
+        y_coords, x_coords = np.indices(weights.shape, dtype=np.float32)
+        cy = float(np.sum(y_coords * weights) / total)
+        cx = float(np.sum(x_coords * weights) / total)
+        return cy, cx
 
     def _advance_dynamic_ash(self):
         if (
@@ -282,9 +441,10 @@ class VolcanicAshEnv(gym.Env):
         ):
             return
 
-        wind_rad = np.deg2rad(float(getattr(self.config, 'wind_direction', 0.0)))
-        dx = self.ash_advection_speed * np.cos(wind_rad)
-        dy = -self.ash_advection_speed * np.sin(wind_rad)
+        self._update_dynamic_wind_state()
+        wind_rad = np.deg2rad(self.ash_dynamic_wind_direction)
+        dx = self.ash_dynamic_wind_speed * np.cos(wind_rad)
+        dy = -self.ash_dynamic_wind_speed * np.sin(wind_rad)
 
         y_coords, x_coords = np.meshgrid(
             np.arange(self.height, dtype=np.float32),
@@ -294,9 +454,21 @@ class VolcanicAshEnv(gym.Env):
         if self.ash_dynamic_noise_x is None or self.ash_dynamic_noise_y is None:
             self._initialize_dynamic_ash_fields()
 
+        source_x = x_coords - dx
+        source_y = y_coords - dy
+        if self.ash_rotation_enabled:
+            cy, cx = self._ash_centroid(self.concentration_map)
+            theta = -self.ash_dynamic_rotation_rate * self.dt
+            cos_t = np.cos(theta)
+            sin_t = np.sin(theta)
+            rel_x = source_x - cx
+            rel_y = source_y - cy
+            source_x = cx + cos_t * rel_x - sin_t * rel_y
+            source_y = cy + sin_t * rel_x + cos_t * rel_y
+
         turbulence = self.ash_turbulence_drift
-        map_x = (x_coords - dx - turbulence * self.ash_dynamic_noise_x).astype(np.float32)
-        map_y = (y_coords - dy - turbulence * self.ash_dynamic_noise_y).astype(np.float32)
+        map_x = (source_x - turbulence * self.ash_dynamic_noise_x).astype(np.float32)
+        map_y = (source_y - turbulence * self.ash_dynamic_noise_y).astype(np.float32)
         moved = cv2.remap(
             self.concentration_map.astype(np.float32),
             map_x,
@@ -326,6 +498,16 @@ class VolcanicAshEnv(gym.Env):
         self.concentration_map = np.clip(moved, 0.0, 1.0).astype(np.float32)
 
     def _sample_safe_point(self, margin: int = 50, max_tries: int = 2000) -> np.ndarray:
+        return self._sample_safe_point_with_clearance(
+            margin=margin,
+            min_clearance=self.airport_clearance_radius,
+            max_tries=max_tries
+        )
+
+    def _sample_safe_point_with_clearance(self,
+                                          margin: int = 50,
+                                          min_clearance: float = 35.0,
+                                          max_tries: int = 2000) -> np.ndarray:
         safe_limit = self.safety_threshold * self.airport_safety_threshold_ratio
         margin_y = min(margin, max(0, (self.height - 2) // 2))
         margin_x = min(margin, max(0, (self.width - 2) // 2))
@@ -338,10 +520,23 @@ class VolcanicAshEnv(gym.Env):
                 self.np_random.integers(low_x, high_x)
             ], dtype=np.float32)
             y, x = int(pos[0]), int(pos[1])
-            if self._get_concentration_at_pos(pos) < safe_limit and self.safe_airport_mask[y, x]:
+            clearance = (
+                float(self.distance_to_cloud[y, x])
+                if self.distance_to_cloud is not None
+                else float('inf')
+            )
+            if (
+                self._get_concentration_at_pos(pos) < safe_limit
+                and self.safe_airport_mask[y, x]
+                and clearance >= min_clearance
+            ):
                 return pos
 
-        safe_indices = np.argwhere(self.safe_airport_mask)
+        if self.distance_to_cloud is not None:
+            fallback_mask = self.safe_airport_mask & (self.distance_to_cloud >= min_clearance * 0.7)
+        else:
+            fallback_mask = self.safe_airport_mask
+        safe_indices = np.argwhere(fallback_mask)
         if len(safe_indices) > 0:
             idx = safe_indices[self.np_random.integers(0, len(safe_indices))]
             return np.array([idx[0], idx[1]], dtype=np.float32)
@@ -352,8 +547,8 @@ class VolcanicAshEnv(gym.Env):
         safe_limit = self.safety_threshold * self.airport_safety_threshold_ratio
         near_cloud_limit = self.safety_threshold * 0.5
         base_safe = self.concentration_map < safe_limit
-        distance_to_cloud = distance_transform_edt(self.concentration_map < near_cloud_limit)
-        clearance_safe = distance_to_cloud >= self.airport_clearance_radius
+        self.distance_to_cloud = distance_transform_edt(self.concentration_map < near_cloud_limit)
+        clearance_safe = self.distance_to_cloud >= self.airport_clearance_radius
         mask = base_safe & clearance_safe
 
         margin_y = min(margin, max(0, (self.height - 2) // 2))
@@ -376,6 +571,61 @@ class VolcanicAshEnv(gym.Env):
             fallback[:, :margin_x] = False
             fallback[:, self.width - margin_x:] = False
         return fallback if np.any(fallback) else base_safe
+
+    def _is_initial_path_clear(self, path_points: List[Tuple[float, float]]) -> bool:
+        if not path_points or self.initial_clear_path_distance <= 0.0:
+            return True
+
+        clear_limit = self.safety_threshold * self.initial_clear_concentration_ratio
+        travelled = 0.0
+        previous = np.asarray(path_points[0], dtype=np.float32)
+        max_conc = self._get_concentration_at_pos(previous)
+
+        for point in path_points[1:]:
+            current = np.asarray(point, dtype=np.float32)
+            segment = current - previous
+            segment_length = float(np.linalg.norm(segment))
+            samples = max(2, int(np.ceil(segment_length / 6.0)))
+            for ratio in np.linspace(0.0, 1.0, samples):
+                pos = previous * (1.0 - ratio) + current * ratio
+                max_conc = max(max_conc, self._get_concentration_at_pos(pos))
+                if max_conc > clear_limit:
+                    return False
+            travelled += segment_length
+            if travelled >= self.initial_clear_path_distance:
+                break
+            previous = current
+
+        return True
+
+    def _sample_flight_endpoints(self, margin: int = 50) -> Tuple[np.ndarray, np.ndarray, List[Tuple[float, float]]]:
+        min_distance = min(self.width, self.height) * 0.4
+        best = None
+
+        for _ in range(180):
+            start_pos = self._sample_safe_point_with_clearance(
+                margin=margin,
+                min_clearance=self.departure_cloud_clearance_radius
+            )
+            target_pos = self._sample_safe_point_with_clearance(
+                margin=margin,
+                min_clearance=self.arrival_cloud_clearance_radius
+            )
+            dist = float(np.linalg.norm(target_pos - start_pos))
+            if dist <= min_distance:
+                continue
+            path = self._build_reference_path(start_pos, target_pos)
+            clear = self._is_initial_path_clear(path)
+            best = (start_pos, target_pos, path)
+            if clear:
+                return best
+
+        if best is not None:
+            return best
+
+        start_pos = self._sample_safe_point(margin)
+        target_pos = self._sample_safe_point(margin)
+        return start_pos, target_pos, self._build_reference_path(start_pos, target_pos)
 
     def _get_forward_concentration_sensor(self) -> np.ndarray:
         values = []
@@ -586,18 +836,19 @@ class VolcanicAshEnv(gym.Env):
         self.ash_exposure += mean_conc * segment_length
         self.path_length_travelled += segment_length
 
-        reward -= 10.0 * mean_conc
+        risk_scale = max(float(self.safety_factor), 0.05)
+        reward -= risk_scale * 10.0 * mean_conc
 
         if max_conc > self.safety_threshold:
             excess = max_conc - self.safety_threshold
-            reward -= 30.0 * excess
+            reward -= risk_scale * 30.0 * excess
 
         if max_conc > self.danger_threshold:
-            reward -= 80.0
+            reward -= risk_scale * 80.0
 
         lethal = False
         if max_conc > 0.9:
-            reward -= 200.0
+            reward -= risk_scale * 200.0
             lethal = True
 
         reward -= 0.05 * (turn_cmd ** 2)
@@ -731,20 +982,14 @@ class VolcanicAshEnv(gym.Env):
 
         self.cruise_speed = self._select_episode_cruise_speed()
         self.speed = self.cruise_speed
+        self.safety_factor = self._select_episode_safety_factor()
+        self.config.fixed_safety_factor = self.safety_factor
 
         margin = 50
         self.safe_airport_mask = self._build_safe_airport_mask(margin)
-        aircraft_pos = self._sample_safe_point(margin)
+        aircraft_pos, target_pos, reference_path = self._sample_flight_endpoints(margin)
 
-        min_distance = min(self.width, self.height) * 0.4
-        target_pos = aircraft_pos.copy()
-        for _ in range(2000):
-            target_pos = self._sample_safe_point(margin)
-            dist = np.linalg.norm(target_pos - aircraft_pos)
-            if dist > min_distance:
-                break
-
-        return self.initialize_flight(aircraft_pos, target_pos)
+        return self.initialize_flight(aircraft_pos, target_pos, reference_path=reference_path)
 
     def _get_observation(self) -> Dict:
         delta = self.target_pos - self.aircraft_pos
@@ -771,6 +1016,10 @@ class VolcanicAshEnv(gym.Env):
             ], dtype=np.float32),
             'cruise_speed': np.array([
                 self.cruise_speed / max(self.max_cruise_speed, 1e-6)
+            ], dtype=np.float32),
+            'safety_factor': np.array([
+                (self.safety_factor - self.min_safety_factor) /
+                max(self.max_safety_factor - self.min_safety_factor, 1e-6)
             ], dtype=np.float32),
             'distance_to_target': np.array([distance_to_target / max_distance],
                                            dtype=np.float32),
@@ -809,6 +1058,7 @@ class VolcanicAshEnv(gym.Env):
             'scene_name': self.scene_name,
             'speed': float(self.speed),
             'cruise_speed': float(self.cruise_speed),
+            'safety_factor': float(self.safety_factor),
             'heading': float(self.heading),
             'max_concentration_exposure': float(self.max_concentration_exposure),
             'path_s': float(path_metrics['s']),
