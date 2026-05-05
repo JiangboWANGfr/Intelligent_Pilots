@@ -537,12 +537,13 @@ def export_safety_factor_comparison(model_dir: str,
                                     ash_diffusion_sigma: Optional[float],
                                     ash_decay_rate: Optional[float],
                                     ash_turbulence_drift: Optional[float],
-                                    safety_factor_values: Sequence[float]) -> Optional[Dict]:
+                                    safety_factor_values: Sequence[float],
+                                    output_subdir: str = 'safety_factor_comparison') -> Optional[Dict]:
     model_path = latest_model_path(model_dir)
     if model_path is None:
         return None
 
-    outputs_dir = os.path.join(output_dir, 'safety_factor_comparison')
+    outputs_dir = os.path.join(output_dir, output_subdir)
     os.makedirs(outputs_dir, exist_ok=True)
     path_results = []
     base_map = None
@@ -702,6 +703,135 @@ def export_safety_factor_comparison(model_dir: str,
     with open(summary_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     summary['outputs'].append(summary_path)
+    return summary
+
+
+def save_safety_factor_multi_scene_overview(comparisons: List[Dict],
+                                            output_dir: str) -> Optional[str]:
+    valid = [item for item in comparisons if item and item.get('runs')]
+    if not valid:
+        return None
+
+    safety_values = sorted({
+        float(run['safety_factor'])
+        for item in valid
+        for run in item.get('runs', [])
+    })
+    if not safety_values:
+        return None
+
+    scene_labels = [
+        f"Scene {index + 1:02d} | seed {item.get('seed', '')}"
+        for index, item in enumerate(valid)
+    ]
+    exposure_matrix = np.full((len(valid), len(safety_values)), np.nan, dtype=np.float32)
+    distance_matrix = np.full_like(exposure_matrix, np.nan)
+    for scene_index, item in enumerate(valid):
+        for run in item.get('runs', []):
+            safety = float(run['safety_factor'])
+            col = safety_values.index(safety)
+            exposure_matrix[scene_index, col] = float(run.get('ash_exposure', np.nan))
+            distance_matrix[scene_index, col] = float(run.get('final_distance', np.nan))
+
+    overview_path = os.path.join(output_dir, 'safety_factor_multi_scene_overview.png')
+    fig, axes = plt.subplots(2, 1, figsize=(13, max(8, len(valid) * 0.9)))
+    y = np.arange(len(valid))
+    bar_height = 0.8 / max(1, len(safety_values))
+    colors = ['#2e7d32', '#f9a825', '#c62828', '#1565c0', '#6a1b9a']
+    for index, safety in enumerate(safety_values):
+        offset = (index - (len(safety_values) - 1) / 2.0) * bar_height
+        axes[0].barh(
+            y + offset,
+            exposure_matrix[:, index],
+            height=bar_height,
+            color=colors[index % len(colors)],
+            label=f'safety {safety:.2f}'
+        )
+        axes[1].barh(
+            y + offset,
+            distance_matrix[:, index],
+            height=bar_height,
+            color=colors[index % len(colors)],
+            label=f'safety {safety:.2f}'
+        )
+
+    axes[0].set_title('Ash Exposure Across Safety Factors and Scenes')
+    axes[0].set_xlabel('Ash Exposure')
+    axes[1].set_title('Final Distance Across Safety Factors and Scenes')
+    axes[1].set_xlabel('Final Distance')
+    for ax in axes:
+        ax.set_yticks(y, scene_labels)
+        ax.grid(True, axis='x', alpha=0.25)
+        ax.legend(loc='best')
+    fig.tight_layout()
+    fig.savefig(overview_path, dpi=160)
+    plt.close(fig)
+    return overview_path
+
+
+def export_safety_factor_comparison_batch(model_dir: str,
+                                          output_dir: str,
+                                          config_path: str,
+                                          base_scene_name: str,
+                                          cruise_speed: Optional[float],
+                                          fixed_scene_maps: bool,
+                                          seed: int,
+                                          max_steps: int,
+                                          random_ash_scenes: bool,
+                                          random_centers_range: Tuple[int, int],
+                                          random_scene_seed: Optional[int],
+                                          dynamic_ash: bool,
+                                          ash_advection_speed: Optional[float],
+                                          ash_diffusion_sigma: Optional[float],
+                                          ash_decay_rate: Optional[float],
+                                          ash_turbulence_drift: Optional[float],
+                                          safety_factor_values: Sequence[float],
+                                          scene_count: int) -> Optional[Dict]:
+    scene_count = max(1, int(scene_count))
+    root_dir = os.path.join(output_dir, 'safety_factor_comparison')
+    os.makedirs(root_dir, exist_ok=True)
+    base_seed = seed if random_scene_seed is None else random_scene_seed
+    comparisons = []
+    for index in range(scene_count):
+        scene_seed = base_seed + index
+        scene_name = (
+            f'随机旋转GMM_安全系数对比_{index + 1:02d}_seed{scene_seed}'
+            if random_ash_scenes
+            else base_scene_name
+        )
+        comparison = export_safety_factor_comparison(
+            model_dir=model_dir,
+            output_dir=output_dir,
+            config_path=config_path,
+            scene_name=scene_name,
+            cruise_speed=cruise_speed,
+            fixed_scene_maps=fixed_scene_maps,
+            seed=seed + index,
+            max_steps=max_steps,
+            random_ash_scenes=random_ash_scenes,
+            random_centers_range=random_centers_range,
+            random_scene_seed=scene_seed if random_ash_scenes else random_scene_seed,
+            dynamic_ash=dynamic_ash,
+            ash_advection_speed=ash_advection_speed,
+            ash_diffusion_sigma=ash_diffusion_sigma,
+            ash_decay_rate=ash_decay_rate,
+            ash_turbulence_drift=ash_turbulence_drift,
+            safety_factor_values=safety_factor_values,
+            output_subdir=os.path.join('safety_factor_comparison', f'scene_{index + 1:02d}_seed{scene_seed}')
+        )
+        if comparison:
+            comparisons.append(comparison)
+
+    overview_path = save_safety_factor_multi_scene_overview(comparisons, root_dir)
+    summary = {
+        'scene_count': len(comparisons),
+        'overview_path': overview_path,
+        'comparisons': comparisons
+    }
+    summary_path = os.path.join(root_dir, 'safety_factor_comparison_batch.json')
+    with open(summary_path, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    summary['summary_path'] = summary_path
     return summary
 
 
@@ -877,6 +1007,8 @@ def main():
                         help='Maximum frames kept from each milestone clip in the stitched GIF.')
     parser.add_argument('--safety-factor-comparison', action='store_true',
                         help='Render same-scene low/medium/high safety factor path comparison assets.')
+    parser.add_argument('--safety-factor-comparison-scenes', type=int, default=1,
+                        help='Number of random scenes rendered for safety factor comparison.')
     parser.add_argument('--safety-factor-values', type=parse_float_list, default=[0.6, 1.0, 1.8],
                         help='Comma-separated safety factors for comparison, e.g. 0.6,1.0,1.8.')
     args = parser.parse_args()
@@ -958,11 +1090,11 @@ def main():
             if isinstance(summary.get('scene'), list) and summary['scene']
             else args.scene
         )
-        summary['safety_factor_comparison'] = export_safety_factor_comparison(
+        summary['safety_factor_comparison'] = export_safety_factor_comparison_batch(
             model_dir=args.model_dir,
             output_dir=args.output_dir,
             config_path=args.config,
-            scene_name=comparison_scene,
+            base_scene_name=comparison_scene,
             cruise_speed=args.cruise_speed,
             fixed_scene_maps=args.fixed_scene_maps,
             seed=args.seed,
@@ -975,7 +1107,8 @@ def main():
             ash_diffusion_sigma=args.ash_diffusion_sigma,
             ash_decay_rate=args.ash_decay_rate,
             ash_turbulence_drift=args.ash_turbulence_drift,
-            safety_factor_values=args.safety_factor_values
+            safety_factor_values=args.safety_factor_values,
+            scene_count=args.safety_factor_comparison_scenes
         )
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
