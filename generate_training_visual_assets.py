@@ -14,7 +14,11 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from evaluate_model import apply_aircraft_runtime_config, parse_scene_names
-from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs
+from src.config.volcanic_ash_config import (
+    VolcanicAshConfig,
+    get_training_scene_configs,
+    resize_config_canvas,
+)
 from src.path_planning.animation_exporter import ValidationAnimationExporter
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
@@ -237,6 +241,16 @@ def parse_int_pair(raw: str) -> Tuple[int, int]:
     if lower < 1 or upper < lower:
         raise argparse.ArgumentTypeError('Expected a valid range with 1 <= min <= max.')
     return lower, upper
+
+
+def parse_size_pair(raw: str) -> Tuple[int, int]:
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated integers, e.g. 768,768.')
+    height, width = int(parts[0]), int(parts[1])
+    if height < 1 or width < 1:
+        raise argparse.ArgumentTypeError('Image size values must be positive.')
+    return height, width
 
 
 def parse_float_list(raw: str) -> List[float]:
@@ -525,6 +539,7 @@ def build_demo_scene_configs(config: VolcanicAshConfig,
 def export_safety_factor_comparison(model_dir: str,
                                     output_dir: str,
                                     config_path: str,
+                                    image_size: Optional[Tuple[int, int]],
                                     scene_name: str,
                                     cruise_speed: Optional[float],
                                     fixed_scene_maps: bool,
@@ -559,6 +574,8 @@ def export_safety_factor_comparison(model_dir: str,
 
     for safety_factor in safety_factor_values:
         config = VolcanicAshConfig.load(config_path)
+        if image_size is not None:
+            resize_config_canvas(config, image_size)
         if dynamic_ash:
             config.enable_dynamic_ash = True
         if ash_advection_speed is not None:
@@ -821,6 +838,7 @@ def save_safety_factor_multi_scene_overview(comparisons: List[Dict],
 def export_safety_factor_comparison_batch(model_dir: str,
                                           output_dir: str,
                                           config_path: str,
+                                          image_size: Optional[Tuple[int, int]],
                                           base_scene_name: str,
                                           cruise_speed: Optional[float],
                                           fixed_scene_maps: bool,
@@ -867,6 +885,7 @@ def export_safety_factor_comparison_batch(model_dir: str,
             model_dir=model_dir,
             output_dir=output_dir,
             config_path=config_path,
+            image_size=image_size,
             scene_name=scene_name,
             cruise_speed=cruise_speed,
             fixed_scene_maps=fixed_scene_maps,
@@ -958,6 +977,7 @@ def export_safety_factor_comparison_batch(model_dir: str,
 def export_checkpoint_animations(model_dir: str,
                                  output_dir: str,
                                  config_path: str,
+                                 image_size: Optional[Tuple[int, int]],
                                  scene_name: str,
                                  cruise_speed: Optional[float],
                                  fixed_scene_maps: bool,
@@ -981,6 +1001,8 @@ def export_checkpoint_animations(model_dir: str,
                                  ash_shear_strength: Optional[float] = None,
                                  vary_scene_per_checkpoint: bool = False) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
+    if image_size is not None:
+        resize_config_canvas(config, image_size)
     if dynamic_ash:
         config.enable_dynamic_ash = True
     if ash_advection_speed is not None:
@@ -1104,6 +1126,8 @@ def main():
     )
     parser.add_argument('--model-dir', default='models/turn_controller_single_v3')
     parser.add_argument('--config', default='output/current_config.json')
+    parser.add_argument('--image-size', type=parse_size_pair, default=None,
+                        help='Map size as height,width, e.g. 768,768. Centers are repositioned proportionally.')
     parser.add_argument('--scene', default='单中心_强风拉伸')
     parser.add_argument('--output-dir', default='output/demo_assets')
     parser.add_argument('--cruise-speed', type=float, default=9.0)
@@ -1205,6 +1229,7 @@ def main():
                 model_dir=args.model_dir,
                 output_dir=args.output_dir,
                 config_path=args.config,
+                image_size=args.image_size,
                 scene_name=scene_name,
                 cruise_speed=args.cruise_speed,
                 fixed_scene_maps=args.fixed_scene_maps,
@@ -1251,6 +1276,7 @@ def main():
             model_dir=args.model_dir,
             output_dir=args.output_dir,
             config_path=args.config,
+            image_size=args.image_size,
             base_scene_name=comparison_scene,
             cruise_speed=args.cruise_speed,
             fixed_scene_maps=args.fixed_scene_maps,

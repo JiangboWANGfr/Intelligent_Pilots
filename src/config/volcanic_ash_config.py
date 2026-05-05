@@ -29,7 +29,7 @@ class VolcanicAshConfig:
     cloud_size: float = 100.0
     concentration_threshold: float = 0.3
     mass_ratio: float = 0.8
-    image_size: Tuple[int, int] = (512, 512)
+    image_size: Tuple[int, int] = (768, 768)
     geo_center_lat: float = 35.0
     geo_center_lon: float = 120.0
     geo_span_lat: float = 2.0
@@ -49,9 +49,9 @@ class VolcanicAshConfig:
     ash_avoidance_activation_ratio: float = 0.6
     airport_safety_threshold_ratio: float = 0.35
     airport_clearance_radius: float = 35.0
-    departure_cloud_clearance_radius: float = 130.0
-    arrival_cloud_clearance_radius: float = 100.0
-    initial_clear_path_distance: float = 120.0
+    departure_cloud_clearance_radius: float = 220.0
+    arrival_cloud_clearance_radius: float = 180.0
+    initial_clear_path_distance: float = 180.0
     initial_clear_concentration_ratio: float = 0.2
     safety_factor_mode: str = "random"
     fixed_safety_factor: float = 1.0
@@ -76,7 +76,7 @@ class VolcanicAshConfig:
     random_scene_seed: Optional[int] = None
     random_scene_min_centers: int = 1
     random_scene_max_centers: int = 6
-    random_scene_position_margin: float = 90.0
+    random_scene_position_margin: float = 140.0
     random_scene_min_std: float = 18.0
     random_scene_max_std: float = 48.0
     random_scene_min_anisotropy: float = 1.4
@@ -93,25 +93,25 @@ class VolcanicAshConfig:
     random_scene_max_high_area: float = 12.0
     random_scene_max_attempts: int = 8
     enable_dynamic_ash: bool = False
-    ash_advection_speed: float = 0.8
-    ash_diffusion_sigma: float = 0.25
-    ash_decay_rate: float = 0.001
-    ash_turbulence_drift: float = 0.25
+    ash_advection_speed: float = 0.18
+    ash_diffusion_sigma: float = 0.16
+    ash_decay_rate: float = 0.0005
+    ash_turbulence_drift: float = 0.08
     ash_dynamic_update_interval: int = 1
     ash_dynamic_renormalize: bool = False
-    ash_advection_speed_min: float = 0.25
-    ash_advection_speed_max: float = 0.7
-    ash_wind_direction_jitter_deg: float = 18.0
-    ash_wind_speed_jitter_ratio: float = 0.35
-    ash_wind_smoothness: float = 0.96
+    ash_advection_speed_min: float = 0.08
+    ash_advection_speed_max: float = 0.28
+    ash_wind_direction_jitter_deg: float = 8.0
+    ash_wind_speed_jitter_ratio: float = 0.2
+    ash_wind_smoothness: float = 0.985
     ash_rotation_enabled: bool = True
-    ash_rotation_rate_deg: float = 0.25
-    ash_rotation_jitter_deg: float = 0.1
-    ash_local_deformation_strength: float = 0.45
-    ash_local_flow_scale: float = 96.0
-    ash_local_flow_smoothness: float = 0.985
-    ash_local_flow_update_interval: int = 8
-    ash_shear_strength: float = 0.22
+    ash_rotation_rate_deg: float = 0.08
+    ash_rotation_jitter_deg: float = 0.03
+    ash_local_deformation_strength: float = 0.22
+    ash_local_flow_scale: float = 140.0
+    ash_local_flow_smoothness: float = 0.992
+    ash_local_flow_update_interval: int = 16
+    ash_shear_strength: float = 0.08
     
     def __post_init__(self):
         if self.centers is None:
@@ -228,6 +228,25 @@ class VolcanicAshConfig:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return cls.from_dict(data)
+
+
+def resize_config_canvas(config: VolcanicAshConfig,
+                         image_size: Tuple[int, int],
+                         scale_centers: bool = True) -> None:
+    old_h, old_w = tuple(config.image_size)
+    new_h, new_w = tuple(image_size)
+    if old_h <= 0 or old_w <= 0:
+        config.image_size = (int(new_h), int(new_w))
+        return
+    if scale_centers and config.centers:
+        scale_x = float(new_w) / float(old_w)
+        scale_y = float(new_h) / float(old_h)
+        for center in config.centers:
+            if 'x' in center:
+                center['x'] = float(center['x']) * scale_x
+            if 'y' in center:
+                center['y'] = float(center['y']) * scale_y
+    config.image_size = (int(new_h), int(new_w))
 
 
 def get_preset_configs() -> Dict[str, VolcanicAshConfig]:

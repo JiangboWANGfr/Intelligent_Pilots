@@ -8,7 +8,11 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs
+from src.config.volcanic_ash_config import (
+    VolcanicAshConfig,
+    get_training_scene_configs,
+    resize_config_canvas,
+)
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.ddpg_agent import DDPGAgent, create_agent, infer_checkpoint_algorithm
 
@@ -17,6 +21,16 @@ def parse_scene_names(raw: Optional[str]) -> Optional[List[str]]:
     if not raw:
         return None
     return [name.strip() for name in raw.split(',') if name.strip()]
+
+
+def parse_size_pair(raw: str):
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated integers, e.g. 768,768.')
+    first, second = int(parts[0]), int(parts[1])
+    if first < 1 or second < 1:
+        raise argparse.ArgumentTypeError('Image size values must be positive.')
+    return first, second
 
 
 def build_scene_configs(config: VolcanicAshConfig,
@@ -41,6 +55,10 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         config.enable_dynamic_ash = True
 
     for scene in scene_configs:
+        if tuple(scene.image_size) != tuple(config.image_size):
+            resize_config_canvas(scene, tuple(config.image_size))
+        else:
+            scene.image_size = tuple(config.image_size)
         scene.fixed_cruise_speed = config.fixed_cruise_speed
         scene.min_cruise_speed = config.min_cruise_speed
         scene.max_cruise_speed = config.max_cruise_speed
@@ -186,6 +204,8 @@ def main():
                         help='Torch device for model inference.')
     parser.add_argument('--config', default='output/current_config.json',
                         help='Path to the volcanic ash config JSON.')
+    parser.add_argument('--image-size', type=parse_size_pair, default=None,
+                        help='Map size as height,width, e.g. 768,768. Centers are repositioned proportionally.')
     parser.add_argument('--episodes', type=int, default=100,
                         help='Number of deterministic evaluation tasks.')
     parser.add_argument('--max-steps', type=int, default=400,
@@ -221,6 +241,8 @@ def main():
         raise FileNotFoundError(f'Model not found: {args.model}')
 
     config = VolcanicAshConfig.load(args.config)
+    if args.image_size is not None:
+        resize_config_canvas(config, args.image_size)
     if args.dynamic_ash:
         config.enable_dynamic_ash = True
     if args.ash_advection_speed is not None:

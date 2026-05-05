@@ -483,6 +483,7 @@ class Trainer:
             
             if self.checkpoint_interval > 0 and (episode + 1) % self.checkpoint_interval == 0:
                 self.save_checkpoint(episode + 1)
+                self.save_training_history()
         
         final_model_path = os.path.join(self.save_dir, 'final_model.pth')
         self.agent.save_model(final_model_path)

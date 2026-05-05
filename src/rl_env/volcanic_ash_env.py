@@ -57,9 +57,9 @@ class VolcanicAshEnv(gym.Env):
         self.ash_avoidance_activation_ratio = 0.6
         self.airport_safety_threshold_ratio = 0.35
         self.airport_clearance_radius = 35.0
-        self.departure_cloud_clearance_radius = 130.0
-        self.arrival_cloud_clearance_radius = 100.0
-        self.initial_clear_path_distance = 120.0
+        self.departure_cloud_clearance_radius = 220.0
+        self.arrival_cloud_clearance_radius = 180.0
+        self.initial_clear_path_distance = 180.0
         self.initial_clear_concentration_ratio = 0.2
         self.safety_factor = 1.0
         self.min_safety_factor = 0.6
@@ -67,10 +67,10 @@ class VolcanicAshEnv(gym.Env):
         self.safety_factor_mode = 'random'
         self.fixed_safety_factor = 1.0
         self.enable_dynamic_ash = False
-        self.ash_advection_speed = 0.8
-        self.ash_diffusion_sigma = 0.25
-        self.ash_decay_rate = 0.001
-        self.ash_turbulence_drift = 0.25
+        self.ash_advection_speed = 0.18
+        self.ash_diffusion_sigma = 0.16
+        self.ash_decay_rate = 0.0005
+        self.ash_turbulence_drift = 0.08
         self.ash_dynamic_update_interval = 1
         self.ash_dynamic_renormalize = False
         self.ash_dynamic_noise_x = None
@@ -80,21 +80,21 @@ class VolcanicAshEnv(gym.Env):
         self.ash_local_flow_target_x = None
         self.ash_local_flow_target_y = None
         self.ash_dynamic_wind_direction = 0.0
-        self.ash_dynamic_wind_speed = 0.8
+        self.ash_dynamic_wind_speed = 0.18
         self.ash_dynamic_rotation_rate = 0.0
-        self.ash_advection_speed_min = 0.25
-        self.ash_advection_speed_max = 0.7
-        self.ash_wind_direction_jitter_deg = 18.0
-        self.ash_wind_speed_jitter_ratio = 0.35
-        self.ash_wind_smoothness = 0.96
+        self.ash_advection_speed_min = 0.08
+        self.ash_advection_speed_max = 0.28
+        self.ash_wind_direction_jitter_deg = 8.0
+        self.ash_wind_speed_jitter_ratio = 0.2
+        self.ash_wind_smoothness = 0.985
         self.ash_rotation_enabled = True
-        self.ash_rotation_rate_deg = 0.25
-        self.ash_rotation_jitter_deg = 0.1
-        self.ash_local_deformation_strength = 0.45
-        self.ash_local_flow_scale = 96.0
-        self.ash_local_flow_smoothness = 0.985
-        self.ash_local_flow_update_interval = 8
-        self.ash_shear_strength = 0.22
+        self.ash_rotation_rate_deg = 0.08
+        self.ash_rotation_jitter_deg = 0.03
+        self.ash_local_deformation_strength = 0.22
+        self.ash_local_flow_scale = 140.0
+        self.ash_local_flow_smoothness = 0.992
+        self.ash_local_flow_update_interval = 16
+        self.ash_shear_strength = 0.08
         self.distance_to_cloud = None
         self.safe_airport_mask = None
         self.cruise_speed_mode = 'fixed'
@@ -223,17 +223,17 @@ class VolcanicAshEnv(gym.Env):
         self.departure_cloud_clearance_radius = float(getattr(
             self.config,
             'departure_cloud_clearance_radius',
-            130.0
+            220.0
         ))
         self.arrival_cloud_clearance_radius = float(getattr(
             self.config,
             'arrival_cloud_clearance_radius',
-            100.0
+            180.0
         ))
         self.initial_clear_path_distance = float(getattr(
             self.config,
             'initial_clear_path_distance',
-            120.0
+            180.0
         ))
         self.initial_clear_concentration_ratio = float(getattr(
             self.config,
@@ -254,21 +254,21 @@ class VolcanicAshEnv(gym.Env):
                 self.min_safety_factor
             )
         self.enable_dynamic_ash = bool(getattr(self.config, 'enable_dynamic_ash', False))
-        self.ash_advection_speed = float(getattr(self.config, 'ash_advection_speed', 0.8))
+        self.ash_advection_speed = float(getattr(self.config, 'ash_advection_speed', 0.18))
         self.ash_diffusion_sigma = max(0.0, float(getattr(
             self.config,
             'ash_diffusion_sigma',
-            0.25
+            0.16
         )))
         self.ash_decay_rate = float(np.clip(
-            getattr(self.config, 'ash_decay_rate', 0.001),
+            getattr(self.config, 'ash_decay_rate', 0.0005),
             0.0,
             0.05
         ))
         self.ash_turbulence_drift = max(0.0, float(getattr(
             self.config,
             'ash_turbulence_drift',
-            0.25
+            0.08
         )))
         self.ash_dynamic_update_interval = max(1, int(getattr(
             self.config,
@@ -283,12 +283,12 @@ class VolcanicAshEnv(gym.Env):
         self.ash_advection_speed_min = float(getattr(
             self.config,
             'ash_advection_speed_min',
-            0.25
+            0.08
         ))
         self.ash_advection_speed_max = float(getattr(
             self.config,
             'ash_advection_speed_max',
-            0.7
+            0.28
         ))
         if self.ash_advection_speed_min > self.ash_advection_speed_max:
             self.ash_advection_speed_min, self.ash_advection_speed_max = (
@@ -298,45 +298,45 @@ class VolcanicAshEnv(gym.Env):
         self.ash_wind_direction_jitter_deg = float(getattr(
             self.config,
             'ash_wind_direction_jitter_deg',
-            18.0
+            8.0
         ))
         self.ash_wind_speed_jitter_ratio = max(0.0, float(getattr(
             self.config,
             'ash_wind_speed_jitter_ratio',
-            0.35
+            0.2
         )))
         self.ash_wind_smoothness = float(np.clip(
-            getattr(self.config, 'ash_wind_smoothness', 0.96),
+            getattr(self.config, 'ash_wind_smoothness', 0.985),
             0.0,
             0.995
         ))
         self.ash_rotation_enabled = bool(getattr(self.config, 'ash_rotation_enabled', True))
-        self.ash_rotation_rate_deg = float(getattr(self.config, 'ash_rotation_rate_deg', 0.25))
-        self.ash_rotation_jitter_deg = float(getattr(self.config, 'ash_rotation_jitter_deg', 0.1))
+        self.ash_rotation_rate_deg = float(getattr(self.config, 'ash_rotation_rate_deg', 0.08))
+        self.ash_rotation_jitter_deg = float(getattr(self.config, 'ash_rotation_jitter_deg', 0.03))
         self.ash_local_deformation_strength = max(0.0, float(getattr(
             self.config,
             'ash_local_deformation_strength',
-            0.45
+            0.22
         )))
         self.ash_local_flow_scale = max(8.0, float(getattr(
             self.config,
             'ash_local_flow_scale',
-            96.0
+            140.0
         )))
         self.ash_local_flow_smoothness = float(np.clip(
-            getattr(self.config, 'ash_local_flow_smoothness', 0.985),
+            getattr(self.config, 'ash_local_flow_smoothness', 0.992),
             0.0,
             0.999
         ))
         self.ash_local_flow_update_interval = max(1, int(getattr(
             self.config,
             'ash_local_flow_update_interval',
-            8
+            16
         )))
         self.ash_shear_strength = max(0.0, float(getattr(
             self.config,
             'ash_shear_strength',
-            0.22
+            0.08
         )))
 
     def _select_episode_cruise_speed(self) -> float:

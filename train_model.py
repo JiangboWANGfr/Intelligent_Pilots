@@ -11,7 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.makedirs('output/mpl_cache', exist_ok=True)
 os.environ.setdefault('MPLCONFIGDIR', 'output/mpl_cache')
 
-from src.config.volcanic_ash_config import VolcanicAshConfig, get_training_scene_configs, get_preset_configs
+from src.config.volcanic_ash_config import (
+    VolcanicAshConfig,
+    get_training_scene_configs,
+    get_preset_configs,
+    resize_config_canvas,
+)
 from src.rl_env.volcanic_ash_env import VolcanicAshEnv
 from src.rl_training.trainer import Trainer
 
@@ -30,6 +35,16 @@ def parse_int_pair(raw: str):
     if lower < 1 or upper < lower:
         raise argparse.ArgumentTypeError('Expected a valid range with 1 <= min <= max.')
     return lower, upper
+
+
+def parse_size_pair(raw: str):
+    parts = [part.strip() for part in raw.split(',')]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError('Expected two comma-separated integers, e.g. 768,768.')
+    height, width = int(parts[0]), int(parts[1])
+    if height < 1 or width < 1:
+        raise argparse.ArgumentTypeError('Image size values must be positive.')
+    return height, width
 
 
 def parse_float_pair(raw: str):
@@ -89,6 +104,10 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         config.enable_dynamic_ash = True
 
     for scene in scene_configs:
+        if tuple(scene.image_size) != tuple(config.image_size):
+            resize_config_canvas(scene, tuple(config.image_size))
+        else:
+            scene.image_size = tuple(config.image_size)
         scene.fixed_cruise_speed = config.fixed_cruise_speed
         scene.min_cruise_speed = config.min_cruise_speed
         scene.max_cruise_speed = config.max_cruise_speed
@@ -224,6 +243,8 @@ def main():
     parser = argparse.ArgumentParser(description='Train the volcanic ash avoidance RL model.')
     parser.add_argument('--config', default='output/current_config.json',
                         help='Path to config JSON.')
+    parser.add_argument('--image-size', type=parse_size_pair, default=None,
+                        help='Map size as height,width, e.g. 768,768. Centers are repositioned proportionally.')
     parser.add_argument('--fallback-preset', default='双中心_复杂扩散',
                         help='Preset used when --config does not exist.')
     parser.add_argument('--scenes', default=None,
@@ -352,6 +373,8 @@ def main():
     print()
 
     config = load_config(args.config, args.fallback_preset)
+    if args.image_size is not None:
+        resize_config_canvas(config, args.image_size)
     if args.random_ash_scenes:
         config.use_random_ash_scenes = True
         config.random_scene_seed = args.random_scene_seed
