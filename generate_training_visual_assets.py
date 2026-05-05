@@ -3,10 +3,11 @@ import json
 import os
 import re
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Patch
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -60,6 +61,7 @@ def save_training_metric_plots(history: Dict, output_dir: str) -> List[str]:
         ('cross_track_error_curve.png', 'Cross Track Error', 'Pixels', history.get('cross_track_errors', []), True),
         ('final_distance_curve.png', 'Final Distance', 'Pixels', history.get('final_distances', []), True),
         ('path_progress_curve.png', 'Path Progress Ratio', 'Ratio', history.get('path_progress_ratios', []), True),
+        ('safety_factor_curve.png', 'Safety Factor', 'Risk Penalty Multiplier', history.get('safety_factors', []), False),
     ]
 
     for filename, title, ylabel, values, smooth in plot_specs:
@@ -85,7 +87,9 @@ def save_training_metric_plots(history: Dict, output_dir: str) -> List[str]:
         ax.set_xlabel('Episode')
         ax.set_ylabel(ylabel)
         ax.grid(True, alpha=0.25)
-        ax.legend()
+        handles, labels = ax.get_legend_handles_labels()
+        if handles and labels:
+            ax.legend()
         fig.tight_layout()
         path = os.path.join(output_dir, filename)
         fig.savefig(path, dpi=160)
@@ -115,6 +119,100 @@ def save_training_metric_plots(history: Dict, output_dir: str) -> List[str]:
     fig.savefig(dashboard_path, dpi=160)
     plt.close(fig)
     outputs.append(dashboard_path)
+    outputs.extend(save_safety_factor_metric_plots(history, output_dir, episodes))
+    return outputs
+
+
+def save_safety_factor_metric_plots(history: Dict,
+                                    output_dir: str,
+                                    episodes: np.ndarray) -> List[str]:
+    safety_factors = np.asarray(history.get('safety_factors', []), dtype=np.float32)
+    if safety_factors.size == 0:
+        return []
+
+    outputs = []
+    ash_exposures = np.asarray(history.get('ash_exposures', []), dtype=np.float32)
+    final_distances = np.asarray(history.get('final_distances', []), dtype=np.float32)
+    success_flags = np.asarray(history.get('success_flags', []), dtype=bool)
+
+    scatter_path = os.path.join(output_dir, 'safety_factor_vs_exposure.png')
+    fig, ax = plt.subplots(figsize=(10, 5))
+    count = min(len(safety_factors), len(ash_exposures), len(success_flags))
+    if count > 0:
+        colors = np.where(success_flags[:count], '#2e7d32', '#c62828')
+        ax.scatter(
+            safety_factors[:count],
+            ash_exposures[:count],
+            c=colors,
+            s=24,
+            alpha=0.7,
+            edgecolors='none'
+        )
+    ax.set_title('Safety Factor vs Ash Exposure')
+    ax.set_xlabel('Safety Factor')
+    ax.set_ylabel('Ash Exposure')
+    ax.grid(True, alpha=0.25)
+    ax.legend(
+        handles=[
+            Patch(facecolor='#2e7d32', label='Success'),
+            Patch(facecolor='#c62828', label='Not success')
+        ],
+        loc='best'
+    )
+    fig.tight_layout()
+    fig.savefig(scatter_path, dpi=160)
+    plt.close(fig)
+    outputs.append(scatter_path)
+
+    bin_path = os.path.join(output_dir, 'safety_factor_bins.png')
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    labels = ['Low safety', 'Medium safety', 'High safety']
+    bins = [0.0, 0.9, 1.3, np.inf]
+    exposure_means = []
+    success_means = []
+    distance_means = []
+    for lower, upper in zip(bins[:-1], bins[1:]):
+        mask = (safety_factors >= lower) & (safety_factors < upper)
+        exposure_mask = mask[:len(ash_exposures)]
+        success_mask = mask[:len(success_flags)]
+        distance_mask = mask[:len(final_distances)]
+        exposure_means.append(float(np.mean(ash_exposures[exposure_mask])) if np.any(exposure_mask) else 0.0)
+        success_means.append(float(np.mean(success_flags[success_mask]) * 100.0) if np.any(success_mask) else 0.0)
+        distance_means.append(float(np.mean(final_distances[distance_mask])) if np.any(distance_mask) else 0.0)
+
+    x = np.arange(len(labels))
+    axes[0].bar(x, exposure_means, color=['#66bb6a', '#ffa726', '#ef5350'])
+    axes[0].set_title('Average Ash Exposure by Safety Level')
+    axes[0].set_xticks(x, labels, rotation=12)
+    axes[0].set_ylabel('Ash Exposure')
+    axes[0].grid(True, axis='y', alpha=0.25)
+
+    width = 0.36
+    axes[1].bar(x - width / 2, success_means, width=width, label='Success %', color='#42a5f5')
+    axes[1].bar(x + width / 2, distance_means, width=width, label='Final distance', color='#ab47bc')
+    axes[1].set_title('Outcome by Safety Level')
+    axes[1].set_xticks(x, labels, rotation=12)
+    axes[1].grid(True, axis='y', alpha=0.25)
+    axes[1].legend()
+    fig.tight_layout()
+    fig.savefig(bin_path, dpi=160)
+    plt.close(fig)
+    outputs.append(bin_path)
+
+    episode_path = os.path.join(output_dir, 'safety_factor_timeline.png')
+    fig, ax = plt.subplots(figsize=(10, 4))
+    xs = episodes[:len(safety_factors)]
+    ax.plot(xs, safety_factors, linewidth=1.5, color='#1565c0')
+    ax.fill_between(xs, safety_factors, 1.0, color='#90caf9', alpha=0.3)
+    ax.axhline(1.0, color='black', linewidth=1, alpha=0.5)
+    ax.set_title('Episode Safety Factor Timeline')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Safety Factor')
+    ax.grid(True, alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(episode_path, dpi=160)
+    plt.close(fig)
+    outputs.append(episode_path)
     return outputs
 
 
@@ -138,6 +236,18 @@ def parse_int_pair(raw: str) -> Tuple[int, int]:
     if lower < 1 or upper < lower:
         raise argparse.ArgumentTypeError('Expected a valid range with 1 <= min <= max.')
     return lower, upper
+
+
+def parse_float_list(raw: str) -> List[float]:
+    values = []
+    for part in raw.split(','):
+        text = part.strip()
+        if not text:
+            continue
+        values.append(float(text))
+    if not values:
+        raise argparse.ArgumentTypeError('Expected at least one numeric value.')
+    return values
 
 
 def parse_episode_list(raw: Optional[str]) -> Optional[List[int]]:
@@ -380,6 +490,221 @@ def simulate_episode(env: VolcanicAshEnv,
     return result
 
 
+def latest_model_path(model_dir: str) -> Optional[str]:
+    final_path = os.path.join(model_dir, 'final_model.pth')
+    if os.path.exists(final_path):
+        return final_path
+    checkpoints = find_milestone_checkpoints(
+        model_dir,
+        max_checkpoints=1,
+        include_final=False,
+        checkpoint_episodes=None
+    )
+    return checkpoints[-1][1] if checkpoints else None
+
+
+def build_demo_scene_configs(config: VolcanicAshConfig,
+                             scene_name: str,
+                             random_ash_scenes: bool,
+                             random_centers_range: Tuple[int, int],
+                             random_scene_seed: Optional[int],
+                             seed: int) -> List[VolcanicAshConfig]:
+    if random_ash_scenes:
+        config.use_random_ash_scenes = True
+        config.random_scene_seed = seed if random_scene_seed is None else random_scene_seed
+        config.random_scene_min_centers = random_centers_range[0]
+        config.random_scene_max_centers = random_centers_range[1]
+        config.scene_name = scene_name
+        config.model_type = 'random_rotated_gmm'
+        config.training_scene_names = []
+        return [VolcanicAshConfig.from_dict(config.to_dict())]
+    return get_training_scene_configs(parse_scene_names(scene_name))
+
+
+def export_safety_factor_comparison(model_dir: str,
+                                    output_dir: str,
+                                    config_path: str,
+                                    scene_name: str,
+                                    cruise_speed: Optional[float],
+                                    fixed_scene_maps: bool,
+                                    seed: int,
+                                    max_steps: int,
+                                    random_ash_scenes: bool,
+                                    random_centers_range: Tuple[int, int],
+                                    random_scene_seed: Optional[int],
+                                    dynamic_ash: bool,
+                                    ash_advection_speed: Optional[float],
+                                    ash_diffusion_sigma: Optional[float],
+                                    ash_decay_rate: Optional[float],
+                                    ash_turbulence_drift: Optional[float],
+                                    safety_factor_values: Sequence[float]) -> Optional[Dict]:
+    model_path = latest_model_path(model_dir)
+    if model_path is None:
+        return None
+
+    outputs_dir = os.path.join(output_dir, 'safety_factor_comparison')
+    os.makedirs(outputs_dir, exist_ok=True)
+    path_results = []
+    base_map = None
+    start_coordinate = None
+    target_coordinate = None
+    agent = None
+
+    for safety_factor in safety_factor_values:
+        config = VolcanicAshConfig.load(config_path)
+        if dynamic_ash:
+            config.enable_dynamic_ash = True
+        if ash_advection_speed is not None:
+            config.ash_advection_speed = ash_advection_speed
+        if ash_diffusion_sigma is not None:
+            config.ash_diffusion_sigma = ash_diffusion_sigma
+        if ash_decay_rate is not None:
+            config.ash_decay_rate = ash_decay_rate
+        if ash_turbulence_drift is not None:
+            config.ash_turbulence_drift = ash_turbulence_drift
+        config.safety_factor_mode = 'fixed'
+        config.fixed_safety_factor = float(safety_factor)
+        config.min_safety_factor = min(config.min_safety_factor, float(safety_factor))
+        config.max_safety_factor = max(config.max_safety_factor, float(safety_factor))
+
+        scene_configs = build_demo_scene_configs(
+            config=config,
+            scene_name=scene_name,
+            random_ash_scenes=random_ash_scenes,
+            random_centers_range=random_centers_range,
+            random_scene_seed=random_scene_seed,
+            seed=seed
+        )
+        apply_aircraft_runtime_config(
+            config,
+            scene_configs,
+            cruise_speed=cruise_speed,
+            cruise_speed_mode='fixed',
+            fixed_scene_maps=fixed_scene_maps,
+            dynamic_ash=dynamic_ash
+        )
+        for scene in scene_configs:
+            scene.safety_factor_mode = 'fixed'
+            scene.fixed_safety_factor = float(safety_factor)
+            scene.min_safety_factor = config.min_safety_factor
+            scene.max_safety_factor = config.max_safety_factor
+
+        env = VolcanicAshEnv(config, scene_configs=scene_configs)
+        env.max_steps = max_steps
+        env.scene_cursor = -1
+        if hasattr(env, 'random_scene_counter'):
+            env.random_scene_counter = 0
+        obs, _ = env.reset(seed=seed)
+        if agent is None:
+            state_dim = len(DDPGAgent.flatten_state(obs))
+            action_dim = int(np.prod(env.action_space.shape))
+            algorithm = infer_checkpoint_algorithm(model_path)
+            agent = create_agent(algorithm, state_dim=state_dim, action_dim=action_dim, device='cpu')
+            agent.load_model(model_path)
+        if hasattr(env, 'random_scene_counter'):
+            env.random_scene_counter = 0
+
+        result = simulate_episode(
+            env=env,
+            agent=agent,
+            seed=seed,
+            max_steps=max_steps,
+            scene_label=scene_name,
+            milestone_label=f'safety_{safety_factor:.2f}'
+        )
+        result['safety_factor'] = float(safety_factor)
+        path_results.append(result)
+        if base_map is None:
+            base_map = env.concentration_map.copy()
+            start_coordinate = result.get('start_coordinate')
+            target_coordinate = result.get('target_coordinate')
+
+    if base_map is None or not path_results:
+        return None
+
+    exporter = ValidationAnimationExporter(VolcanicAshConfig.load(config_path), base_map)
+    map_rgb = exporter._build_colored_map(render_scale=2, concentration_map=base_map)
+    scale_x = map_rgb.shape[1] / base_map.shape[1]
+    scale_y = map_rgb.shape[0] / base_map.shape[0]
+    colors = ['#2e7d32', '#f9a825', '#c62828', '#1565c0', '#6a1b9a']
+
+    figure_path = os.path.join(outputs_dir, 'safety_factor_path_comparison.png')
+    fig, ax = plt.subplots(figsize=(11, 9))
+    ax.imshow(map_rgb)
+    for index, result in enumerate(path_results):
+        coords = np.asarray(result.get('path_coordinates', []), dtype=np.float32)
+        if coords.size == 0:
+            continue
+        xs = coords[:, 0] * scale_x
+        ys = coords[:, 1] * scale_y
+        label = (
+            f"safety {result['safety_factor']:.2f} | "
+            f"{'success' if result.get('success') else 'not success'} | "
+            f"exposure {result['validation_info'].get('ash_exposure', 0.0):.1f}"
+        )
+        ax.plot(xs, ys, color=colors[index % len(colors)], linewidth=2.8, label=label)
+    if start_coordinate:
+        ax.scatter(start_coordinate[0] * scale_x, start_coordinate[1] * scale_y,
+                   s=90, color='#00c853', edgecolor='white', linewidth=1.5, zorder=5)
+        ax.text(start_coordinate[0] * scale_x + 8, start_coordinate[1] * scale_y,
+                'START', color='black', fontsize=10, weight='bold')
+    if target_coordinate:
+        ax.scatter(target_coordinate[0] * scale_x, target_coordinate[1] * scale_y,
+                   s=110, marker='x', color='#d32f2f', linewidth=3, zorder=5)
+        ax.text(target_coordinate[0] * scale_x + 8, target_coordinate[1] * scale_y,
+                'TARGET', color='black', fontsize=10, weight='bold')
+    ax.set_title('Same Scene, Different Safety Factors')
+    ax.set_axis_off()
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.08), ncol=1, frameon=True)
+    fig.tight_layout()
+    fig.savefig(figure_path, dpi=170, bbox_inches='tight')
+    plt.close(fig)
+
+    metric_path = os.path.join(outputs_dir, 'safety_factor_outcome_bars.png')
+    labels = [f"{result['safety_factor']:.2f}" for result in path_results]
+    exposures = [float(result['validation_info'].get('ash_exposure', 0.0)) for result in path_results]
+    rewards = [float(result.get('total_reward', 0.0)) for result in path_results]
+    final_distances = [float(result['validation_info'].get('distance_to_target', 0.0)) for result in path_results]
+    x = np.arange(len(labels))
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.5))
+    axes[0].bar(x, exposures, color=colors[:len(labels)])
+    axes[0].set_title('Ash Exposure')
+    axes[1].bar(x, rewards, color=colors[:len(labels)])
+    axes[1].set_title('Total Reward')
+    axes[2].bar(x, final_distances, color=colors[:len(labels)])
+    axes[2].set_title('Final Distance')
+    for ax in axes:
+        ax.set_xticks(x, labels)
+        ax.set_xlabel('Safety Factor')
+        ax.grid(True, axis='y', alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(metric_path, dpi=160)
+    plt.close(fig)
+
+    summary_path = os.path.join(outputs_dir, 'safety_factor_comparison.json')
+    summary = {
+        'model_path': model_path,
+        'scene_name': scene_name,
+        'seed': seed,
+        'outputs': [figure_path, metric_path],
+        'runs': [
+            {
+                'safety_factor': result['safety_factor'],
+                'success': result['success'],
+                'total_reward': result['total_reward'],
+                'ash_exposure': result['validation_info'].get('ash_exposure', 0.0),
+                'final_distance': result['validation_info'].get('distance_to_target', 0.0),
+                'path_progress_ratio': result['validation_info'].get('path_progress_ratio', 0.0)
+            }
+            for result in path_results
+        ]
+    }
+    with open(summary_path, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    summary['outputs'].append(summary_path)
+    return summary
+
+
 def export_checkpoint_animations(model_dir: str,
                                  output_dir: str,
                                  config_path: str,
@@ -550,6 +875,10 @@ def main():
                         help='Filename for the stitched training progress GIF.')
     parser.add_argument('--max-frames-per-progress-clip', type=int, default=90,
                         help='Maximum frames kept from each milestone clip in the stitched GIF.')
+    parser.add_argument('--safety-factor-comparison', action='store_true',
+                        help='Render same-scene low/medium/high safety factor path comparison assets.')
+    parser.add_argument('--safety-factor-values', type=parse_float_list, default=[0.6, 1.0, 1.8],
+                        help='Comma-separated safety factors for comparison, e.g. 0.6,1.0,1.8.')
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -564,6 +893,7 @@ def main():
         'vary_scene_per_checkpoint': args.vary_scene_per_checkpoint,
         'metric_plots': [],
         'animations': [],
+        'safety_factor_comparison': None,
         'stitched_progress_gif': None
     }
 
@@ -620,6 +950,32 @@ def main():
             output_dir=args.output_dir,
             filename=args.progress_gif_name,
             max_frames_per_clip=args.max_frames_per_progress_clip
+        )
+
+    if args.safety_factor_comparison:
+        comparison_scene = (
+            summary['scene'][0]
+            if isinstance(summary.get('scene'), list) and summary['scene']
+            else args.scene
+        )
+        summary['safety_factor_comparison'] = export_safety_factor_comparison(
+            model_dir=args.model_dir,
+            output_dir=args.output_dir,
+            config_path=args.config,
+            scene_name=comparison_scene,
+            cruise_speed=args.cruise_speed,
+            fixed_scene_maps=args.fixed_scene_maps,
+            seed=args.seed,
+            max_steps=args.max_steps,
+            random_ash_scenes=args.random_ash_scenes,
+            random_centers_range=args.random_centers_range,
+            random_scene_seed=args.random_scene_seed,
+            dynamic_ash=args.dynamic_ash,
+            ash_advection_speed=args.ash_advection_speed,
+            ash_diffusion_sigma=args.ash_diffusion_sigma,
+            ash_decay_rate=args.ash_decay_rate,
+            ash_turbulence_drift=args.ash_turbulence_drift,
+            safety_factor_values=args.safety_factor_values
         )
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
