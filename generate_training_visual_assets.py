@@ -538,6 +538,11 @@ def export_safety_factor_comparison(model_dir: str,
                                     ash_diffusion_sigma: Optional[float],
                                     ash_decay_rate: Optional[float],
                                     ash_turbulence_drift: Optional[float],
+                                    ash_local_deformation_strength: Optional[float],
+                                    ash_local_flow_scale: Optional[float],
+                                    ash_local_flow_smoothness: Optional[float],
+                                    ash_local_flow_update_interval: Optional[int],
+                                    ash_shear_strength: Optional[float],
                                     safety_factor_values: Sequence[float],
                                     output_subdir: str = 'safety_factor_comparison') -> Optional[Dict]:
     model_path = latest_model_path(model_dir)
@@ -564,6 +569,16 @@ def export_safety_factor_comparison(model_dir: str,
             config.ash_decay_rate = ash_decay_rate
         if ash_turbulence_drift is not None:
             config.ash_turbulence_drift = ash_turbulence_drift
+        if ash_local_deformation_strength is not None:
+            config.ash_local_deformation_strength = ash_local_deformation_strength
+        if ash_local_flow_scale is not None:
+            config.ash_local_flow_scale = ash_local_flow_scale
+        if ash_local_flow_smoothness is not None:
+            config.ash_local_flow_smoothness = ash_local_flow_smoothness
+        if ash_local_flow_update_interval is not None:
+            config.ash_local_flow_update_interval = ash_local_flow_update_interval
+        if ash_shear_strength is not None:
+            config.ash_shear_strength = ash_shear_strength
         config.safety_factor_mode = 'fixed'
         config.fixed_safety_factor = float(safety_factor)
         config.min_safety_factor = min(config.min_safety_factor, float(safety_factor))
@@ -819,6 +834,11 @@ def export_safety_factor_comparison_batch(model_dir: str,
                                           ash_diffusion_sigma: Optional[float],
                                           ash_decay_rate: Optional[float],
                                           ash_turbulence_drift: Optional[float],
+                                          ash_local_deformation_strength: Optional[float],
+                                          ash_local_flow_scale: Optional[float],
+                                          ash_local_flow_smoothness: Optional[float],
+                                          ash_local_flow_update_interval: Optional[int],
+                                          ash_shear_strength: Optional[float],
                                           safety_factor_values: Sequence[float],
                                           scene_count: int,
                                           candidate_multiplier: int = 8,
@@ -860,6 +880,11 @@ def export_safety_factor_comparison_batch(model_dir: str,
             ash_diffusion_sigma=ash_diffusion_sigma,
             ash_decay_rate=ash_decay_rate,
             ash_turbulence_drift=ash_turbulence_drift,
+            ash_local_deformation_strength=ash_local_deformation_strength,
+            ash_local_flow_scale=ash_local_flow_scale,
+            ash_local_flow_smoothness=ash_local_flow_smoothness,
+            ash_local_flow_update_interval=ash_local_flow_update_interval,
+            ash_shear_strength=ash_shear_strength,
             safety_factor_values=safety_factor_values,
             output_subdir=subdir
         )
@@ -949,6 +974,11 @@ def export_checkpoint_animations(model_dir: str,
                                  ash_diffusion_sigma: Optional[float] = None,
                                  ash_decay_rate: Optional[float] = None,
                                  ash_turbulence_drift: Optional[float] = None,
+                                 ash_local_deformation_strength: Optional[float] = None,
+                                 ash_local_flow_scale: Optional[float] = None,
+                                 ash_local_flow_smoothness: Optional[float] = None,
+                                 ash_local_flow_update_interval: Optional[int] = None,
+                                 ash_shear_strength: Optional[float] = None,
                                  vary_scene_per_checkpoint: bool = False) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
     if dynamic_ash:
@@ -961,6 +991,16 @@ def export_checkpoint_animations(model_dir: str,
         config.ash_decay_rate = ash_decay_rate
     if ash_turbulence_drift is not None:
         config.ash_turbulence_drift = ash_turbulence_drift
+    if ash_local_deformation_strength is not None:
+        config.ash_local_deformation_strength = ash_local_deformation_strength
+    if ash_local_flow_scale is not None:
+        config.ash_local_flow_scale = ash_local_flow_scale
+    if ash_local_flow_smoothness is not None:
+        config.ash_local_flow_smoothness = ash_local_flow_smoothness
+    if ash_local_flow_update_interval is not None:
+        config.ash_local_flow_update_interval = ash_local_flow_update_interval
+    if ash_shear_strength is not None:
+        config.ash_shear_strength = ash_shear_strength
     if random_ash_scenes:
         config.use_random_ash_scenes = True
         config.random_scene_seed = seed if random_scene_seed is None else random_scene_seed
@@ -1085,6 +1125,11 @@ def main():
     parser.add_argument('--ash-diffusion-sigma', type=float, default=None)
     parser.add_argument('--ash-decay-rate', type=float, default=None)
     parser.add_argument('--ash-turbulence-drift', type=float, default=None)
+    parser.add_argument('--ash-local-deformation-strength', type=float, default=None)
+    parser.add_argument('--ash-local-flow-scale', type=float, default=None)
+    parser.add_argument('--ash-local-flow-smoothness', type=float, default=None)
+    parser.add_argument('--ash-local-flow-update-interval', type=int, default=None)
+    parser.add_argument('--ash-shear-strength', type=float, default=None)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--max-steps', type=int, default=260)
     parser.add_argument('--max-checkpoints', type=int, default=4)
@@ -1180,6 +1225,11 @@ def main():
                 ash_diffusion_sigma=args.ash_diffusion_sigma,
                 ash_decay_rate=args.ash_decay_rate,
                 ash_turbulence_drift=args.ash_turbulence_drift,
+                ash_local_deformation_strength=args.ash_local_deformation_strength,
+                ash_local_flow_scale=args.ash_local_flow_scale,
+                ash_local_flow_smoothness=args.ash_local_flow_smoothness,
+                ash_local_flow_update_interval=args.ash_local_flow_update_interval,
+                ash_shear_strength=args.ash_shear_strength,
                 vary_scene_per_checkpoint=args.vary_scene_per_checkpoint
             ))
 
@@ -1214,6 +1264,11 @@ def main():
             ash_diffusion_sigma=args.ash_diffusion_sigma,
             ash_decay_rate=args.ash_decay_rate,
             ash_turbulence_drift=args.ash_turbulence_drift,
+            ash_local_deformation_strength=args.ash_local_deformation_strength,
+            ash_local_flow_scale=args.ash_local_flow_scale,
+            ash_local_flow_smoothness=args.ash_local_flow_smoothness,
+            ash_local_flow_update_interval=args.ash_local_flow_update_interval,
+            ash_shear_strength=args.ash_shear_strength,
             safety_factor_values=args.safety_factor_values,
             scene_count=args.safety_factor_comparison_scenes,
             candidate_multiplier=args.safety_factor_candidate_multiplier,

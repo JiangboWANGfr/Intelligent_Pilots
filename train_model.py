@@ -127,6 +127,11 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_rotation_enabled = config.ash_rotation_enabled
         scene.ash_rotation_rate_deg = config.ash_rotation_rate_deg
         scene.ash_rotation_jitter_deg = config.ash_rotation_jitter_deg
+        scene.ash_local_deformation_strength = config.ash_local_deformation_strength
+        scene.ash_local_flow_scale = config.ash_local_flow_scale
+        scene.ash_local_flow_smoothness = config.ash_local_flow_smoothness
+        scene.ash_local_flow_update_interval = config.ash_local_flow_update_interval
+        scene.ash_shear_strength = config.ash_shear_strength
 
 
 def safe_filename(name: str) -> str:
@@ -271,6 +276,16 @@ def main():
                         help='Per-update concentration decay rate for dynamic ash.')
     parser.add_argument('--ash-turbulence-drift', type=float, default=None,
                         help='Per-update turbulent displacement strength in pixels.')
+    parser.add_argument('--ash-local-deformation-strength', type=float, default=None,
+                        help='Per-update non-rigid local ash deformation strength in pixels.')
+    parser.add_argument('--ash-local-flow-scale', type=float, default=None,
+                        help='Spatial scale of the smooth local ash deformation flow field.')
+    parser.add_argument('--ash-local-flow-smoothness', type=float, default=None,
+                        help='Temporal smoothing for local ash deformation flow.')
+    parser.add_argument('--ash-local-flow-update-interval', type=int, default=None,
+                        help='Steps between new local ash deformation flow targets.')
+    parser.add_argument('--ash-shear-strength', type=float, default=None,
+                        help='Large-scale wind shear deformation strength.')
     parser.add_argument('--ash-advection-speed-range', type=parse_float_pair, default=None,
                         help='Dynamic ash advection speed range as min,max pixels per step.')
     parser.add_argument('--departure-cloud-clearance', type=float, default=None,
@@ -355,6 +370,16 @@ def main():
         config.ash_decay_rate = args.ash_decay_rate
     if args.ash_turbulence_drift is not None:
         config.ash_turbulence_drift = args.ash_turbulence_drift
+    if args.ash_local_deformation_strength is not None:
+        config.ash_local_deformation_strength = args.ash_local_deformation_strength
+    if args.ash_local_flow_scale is not None:
+        config.ash_local_flow_scale = args.ash_local_flow_scale
+    if args.ash_local_flow_smoothness is not None:
+        config.ash_local_flow_smoothness = args.ash_local_flow_smoothness
+    if args.ash_local_flow_update_interval is not None:
+        config.ash_local_flow_update_interval = args.ash_local_flow_update_interval
+    if args.ash_shear_strength is not None:
+        config.ash_shear_strength = args.ash_shear_strength
     if args.ash_advection_speed_range is not None:
         config.ash_advection_speed_min = float(args.ash_advection_speed_range[0])
         config.ash_advection_speed_max = float(args.ash_advection_speed_range[1])
@@ -406,6 +431,8 @@ def main():
         print(f'  Ash decay rate: {config.ash_decay_rate}')
         print(f'  Ash turbulence drift: {config.ash_turbulence_drift} px')
         print(f'  Ash speed range: {config.ash_advection_speed_min}-{config.ash_advection_speed_max} px/step')
+        print(f'  Ash local deformation: {config.ash_local_deformation_strength} px')
+        print(f'  Ash shear strength: {config.ash_shear_strength}')
     print(f'  Departure cloud clearance: {config.departure_cloud_clearance_radius}')
     print(f'  Initial clear path distance: {config.initial_clear_path_distance}')
     print(f'  Safety factor: {config.safety_factor_mode} ({config.min_safety_factor}-{config.max_safety_factor})')

@@ -79,6 +79,11 @@ def apply_aircraft_runtime_config(config: VolcanicAshConfig,
         scene.ash_rotation_enabled = config.ash_rotation_enabled
         scene.ash_rotation_rate_deg = config.ash_rotation_rate_deg
         scene.ash_rotation_jitter_deg = config.ash_rotation_jitter_deg
+        scene.ash_local_deformation_strength = config.ash_local_deformation_strength
+        scene.ash_local_flow_scale = config.ash_local_flow_scale
+        scene.ash_local_flow_smoothness = config.ash_local_flow_smoothness
+        scene.ash_local_flow_update_interval = config.ash_local_flow_update_interval
+        scene.ash_shear_strength = config.ash_shear_strength
 
 
 def infer_algorithm(model_path: str, requested: str) -> str:
@@ -201,6 +206,11 @@ def main():
     parser.add_argument('--ash-diffusion-sigma', type=float, default=None)
     parser.add_argument('--ash-decay-rate', type=float, default=None)
     parser.add_argument('--ash-turbulence-drift', type=float, default=None)
+    parser.add_argument('--ash-local-deformation-strength', type=float, default=None)
+    parser.add_argument('--ash-local-flow-scale', type=float, default=None)
+    parser.add_argument('--ash-local-flow-smoothness', type=float, default=None)
+    parser.add_argument('--ash-local-flow-update-interval', type=int, default=None)
+    parser.add_argument('--ash-shear-strength', type=float, default=None)
     parser.add_argument('--output', default='output/evaluation_results.json',
                         help='Where to write detailed JSON results.')
     args = parser.parse_args()
@@ -221,6 +231,16 @@ def main():
         config.ash_decay_rate = args.ash_decay_rate
     if args.ash_turbulence_drift is not None:
         config.ash_turbulence_drift = args.ash_turbulence_drift
+    if args.ash_local_deformation_strength is not None:
+        config.ash_local_deformation_strength = args.ash_local_deformation_strength
+    if args.ash_local_flow_scale is not None:
+        config.ash_local_flow_scale = args.ash_local_flow_scale
+    if args.ash_local_flow_smoothness is not None:
+        config.ash_local_flow_smoothness = args.ash_local_flow_smoothness
+    if args.ash_local_flow_update_interval is not None:
+        config.ash_local_flow_update_interval = args.ash_local_flow_update_interval
+    if args.ash_shear_strength is not None:
+        config.ash_shear_strength = args.ash_shear_strength
     scene_configs = build_scene_configs(config, parse_scene_names(args.scenes))
     apply_aircraft_runtime_config(
         config,

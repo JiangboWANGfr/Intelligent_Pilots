@@ -107,6 +107,11 @@ class VolcanicAshConfig:
     ash_rotation_enabled: bool = True
     ash_rotation_rate_deg: float = 0.25
     ash_rotation_jitter_deg: float = 0.1
+    ash_local_deformation_strength: float = 0.45
+    ash_local_flow_scale: float = 96.0
+    ash_local_flow_smoothness: float = 0.985
+    ash_local_flow_update_interval: int = 8
+    ash_shear_strength: float = 0.22
     
     def __post_init__(self):
         if self.centers is None:
@@ -196,7 +201,12 @@ class VolcanicAshConfig:
             'ash_wind_smoothness': self.ash_wind_smoothness,
             'ash_rotation_enabled': self.ash_rotation_enabled,
             'ash_rotation_rate_deg': self.ash_rotation_rate_deg,
-            'ash_rotation_jitter_deg': self.ash_rotation_jitter_deg
+            'ash_rotation_jitter_deg': self.ash_rotation_jitter_deg,
+            'ash_local_deformation_strength': self.ash_local_deformation_strength,
+            'ash_local_flow_scale': self.ash_local_flow_scale,
+            'ash_local_flow_smoothness': self.ash_local_flow_smoothness,
+            'ash_local_flow_update_interval': self.ash_local_flow_update_interval,
+            'ash_shear_strength': self.ash_shear_strength
         }
     
     @classmethod

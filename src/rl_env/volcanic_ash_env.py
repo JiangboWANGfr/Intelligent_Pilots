@@ -75,6 +75,10 @@ class VolcanicAshEnv(gym.Env):
         self.ash_dynamic_renormalize = False
         self.ash_dynamic_noise_x = None
         self.ash_dynamic_noise_y = None
+        self.ash_local_flow_x = None
+        self.ash_local_flow_y = None
+        self.ash_local_flow_target_x = None
+        self.ash_local_flow_target_y = None
         self.ash_dynamic_wind_direction = 0.0
         self.ash_dynamic_wind_speed = 0.8
         self.ash_dynamic_rotation_rate = 0.0
@@ -86,6 +90,11 @@ class VolcanicAshEnv(gym.Env):
         self.ash_rotation_enabled = True
         self.ash_rotation_rate_deg = 0.25
         self.ash_rotation_jitter_deg = 0.1
+        self.ash_local_deformation_strength = 0.45
+        self.ash_local_flow_scale = 96.0
+        self.ash_local_flow_smoothness = 0.985
+        self.ash_local_flow_update_interval = 8
+        self.ash_shear_strength = 0.22
         self.distance_to_cloud = None
         self.safe_airport_mask = None
         self.cruise_speed_mode = 'fixed'
@@ -304,6 +313,31 @@ class VolcanicAshEnv(gym.Env):
         self.ash_rotation_enabled = bool(getattr(self.config, 'ash_rotation_enabled', True))
         self.ash_rotation_rate_deg = float(getattr(self.config, 'ash_rotation_rate_deg', 0.25))
         self.ash_rotation_jitter_deg = float(getattr(self.config, 'ash_rotation_jitter_deg', 0.1))
+        self.ash_local_deformation_strength = max(0.0, float(getattr(
+            self.config,
+            'ash_local_deformation_strength',
+            0.45
+        )))
+        self.ash_local_flow_scale = max(8.0, float(getattr(
+            self.config,
+            'ash_local_flow_scale',
+            96.0
+        )))
+        self.ash_local_flow_smoothness = float(np.clip(
+            getattr(self.config, 'ash_local_flow_smoothness', 0.985),
+            0.0,
+            0.999
+        ))
+        self.ash_local_flow_update_interval = max(1, int(getattr(
+            self.config,
+            'ash_local_flow_update_interval',
+            8
+        )))
+        self.ash_shear_strength = max(0.0, float(getattr(
+            self.config,
+            'ash_shear_strength',
+            0.22
+        )))
 
     def _select_episode_cruise_speed(self) -> float:
         if self.cruise_speed_mode == 'random':
@@ -358,6 +392,10 @@ class VolcanicAshEnv(gym.Env):
         if not self.enable_dynamic_ash:
             self.ash_dynamic_noise_x = None
             self.ash_dynamic_noise_y = None
+            self.ash_local_flow_x = None
+            self.ash_local_flow_y = None
+            self.ash_local_flow_target_x = None
+            self.ash_local_flow_target_y = None
             return
 
         base_seed = getattr(self.config, 'random_seed', None)
@@ -370,6 +408,10 @@ class VolcanicAshEnv(gym.Env):
         self.ash_dynamic_noise_y = (
             generator.generate_fast_noise((self.height, self.width), scale=130.0, octaves=3) - 0.5
         ).astype(np.float32)
+        self.ash_local_flow_x = self._sample_local_ash_flow()
+        self.ash_local_flow_y = self._sample_local_ash_flow()
+        self.ash_local_flow_target_x = self.ash_local_flow_x.copy()
+        self.ash_local_flow_target_y = self.ash_local_flow_y.copy()
         base_speed = float(getattr(self.config, 'ash_advection_speed', self.ash_advection_speed))
         base_speed = float(np.clip(
             base_speed,
@@ -385,6 +427,23 @@ class VolcanicAshEnv(gym.Env):
         self.ash_dynamic_wind_speed = base_speed
         rotation_sign = -1.0 if self.np_random.random() < 0.5 else 1.0
         self.ash_dynamic_rotation_rate = rotation_sign * float(np.deg2rad(self.ash_rotation_rate_deg))
+
+    def _sample_local_ash_flow(self) -> np.ndarray:
+        scale = max(8.0, self.ash_local_flow_scale)
+        grid_h = max(4, int(np.ceil(self.height / scale)) + 3)
+        grid_w = max(4, int(np.ceil(self.width / scale)) + 3)
+        coarse = self.np_random.normal(0.0, 1.0, size=(grid_h, grid_w)).astype(np.float32)
+        coarse = cv2.GaussianBlur(coarse, ksize=(0, 0), sigmaX=1.0, sigmaY=1.0)
+        field = cv2.resize(
+            coarse,
+            (self.width, self.height),
+            interpolation=cv2.INTER_CUBIC
+        ).astype(np.float32)
+        field -= float(np.mean(field))
+        std = float(np.std(field))
+        if std > 1e-6:
+            field /= std
+        return np.clip(field, -2.0, 2.0).astype(np.float32)
 
     def _update_dynamic_wind_state(self):
         smooth = self.ash_wind_smoothness
@@ -422,6 +481,26 @@ class VolcanicAshEnv(gym.Env):
             smooth * self.ash_dynamic_rotation_rate +
             (1.0 - smooth) * rotation_sample
         )
+        if self.ash_local_deformation_strength > 0.0:
+            flow_smooth = self.ash_local_flow_smoothness
+            if self.ash_local_flow_x is None or self.ash_local_flow_y is None:
+                self.ash_local_flow_x = self._sample_local_ash_flow()
+                self.ash_local_flow_y = self._sample_local_ash_flow()
+            if (
+                self.ash_local_flow_target_x is None
+                or self.ash_local_flow_target_y is None
+                or self.step_count % self.ash_local_flow_update_interval == 0
+            ):
+                self.ash_local_flow_target_x = self._sample_local_ash_flow()
+                self.ash_local_flow_target_y = self._sample_local_ash_flow()
+            self.ash_local_flow_x = (
+                flow_smooth * self.ash_local_flow_x +
+                (1.0 - flow_smooth) * self.ash_local_flow_target_x
+            ).astype(np.float32)
+            self.ash_local_flow_y = (
+                flow_smooth * self.ash_local_flow_y +
+                (1.0 - flow_smooth) * self.ash_local_flow_target_y
+            ).astype(np.float32)
 
     def _ash_centroid(self, map_array: np.ndarray) -> Tuple[float, float]:
         weights = np.clip(map_array, 0.0, 1.0)
@@ -454,8 +533,27 @@ class VolcanicAshEnv(gym.Env):
         if self.ash_dynamic_noise_x is None or self.ash_dynamic_noise_y is None:
             self._initialize_dynamic_ash_fields()
 
-        source_x = x_coords - dx
-        source_y = y_coords - dy
+        local_dx = np.zeros_like(x_coords, dtype=np.float32)
+        local_dy = np.zeros_like(y_coords, dtype=np.float32)
+        if self.ash_local_deformation_strength > 0.0:
+            if self.ash_local_flow_x is None or self.ash_local_flow_y is None:
+                self._initialize_dynamic_ash_fields()
+            local_dx += self.ash_local_deformation_strength * self.ash_local_flow_x
+            local_dy += self.ash_local_deformation_strength * self.ash_local_flow_y
+
+        if self.ash_shear_strength > 0.0:
+            cy, cx = self._ash_centroid(self.concentration_map)
+            rel_x_norm = (x_coords - cx) / max(self.width, 1)
+            rel_y_norm = (y_coords - cy) / max(self.height, 1)
+            phase = 0.035 * float(self.step_count)
+            shear_x = self.ash_shear_strength * np.sin(phase + 0.7)
+            shear_y = self.ash_shear_strength * np.cos(phase)
+            shear_scale = max(self.width, self.height) / 64.0
+            local_dx += shear_x * rel_y_norm * shear_scale
+            local_dy += shear_y * rel_x_norm * shear_scale
+
+        source_x = x_coords - dx - local_dx
+        source_y = y_coords - dy - local_dy
         if self.ash_rotation_enabled:
             cy, cx = self._ash_centroid(self.concentration_map)
             theta = -self.ash_dynamic_rotation_rate * self.dt
