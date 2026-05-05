@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -623,10 +624,21 @@ def export_safety_factor_comparison(model_dir: str,
     if base_map is None or not path_results:
         return None
 
-    exporter = ValidationAnimationExporter(VolcanicAshConfig.load(config_path), base_map)
-    map_rgb = exporter._build_colored_map(render_scale=2, concentration_map=base_map)
-    scale_x = map_rgb.shape[1] / base_map.shape[1]
-    scale_y = map_rgb.shape[0] / base_map.shape[0]
+    display_map = np.array(base_map, copy=True)
+    dynamic_maps = []
+    for result in path_results:
+        for map_array in result.get('concentration_maps', []):
+            map_float = np.asarray(map_array, dtype=np.float32)
+            if map_float.dtype == np.uint8 or np.max(map_float) > 1.0:
+                map_float = map_float / 255.0
+            dynamic_maps.append(np.clip(map_float, 0.0, 1.0))
+    if dynamic_maps:
+        display_map = np.maximum.reduce([display_map, *dynamic_maps])
+
+    exporter = ValidationAnimationExporter(VolcanicAshConfig.load(config_path), display_map)
+    map_rgb = exporter._build_colored_map(render_scale=2, concentration_map=display_map)
+    scale_x = map_rgb.shape[1] / display_map.shape[1]
+    scale_y = map_rgb.shape[0] / display_map.shape[0]
     colors = ['#2e7d32', '#f9a825', '#c62828', '#1565c0', '#6a1b9a']
 
     figure_path = os.path.join(outputs_dir, 'safety_factor_path_comparison.png')
@@ -654,7 +666,8 @@ def export_safety_factor_comparison(model_dir: str,
                    s=110, marker='x', color='#d32f2f', linewidth=3, zorder=5)
         ax.text(target_coordinate[0] * scale_x + 8, target_coordinate[1] * scale_y,
                 'TARGET', color='black', fontsize=10, weight='bold')
-    ax.set_title('Same Scene, Different Safety Factors')
+    title_suffix = 'Ash Motion Envelope' if dynamic_maps else 'Initial Ash Map'
+    ax.set_title(f'Same Scene, Different Safety Factors ({title_suffix})')
     ax.set_axis_off()
     ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.08), ncol=1, frameon=True)
     fig.tight_layout()
@@ -666,14 +679,23 @@ def export_safety_factor_comparison(model_dir: str,
     exposures = [float(result['validation_info'].get('ash_exposure', 0.0)) for result in path_results]
     rewards = [float(result.get('total_reward', 0.0)) for result in path_results]
     final_distances = [float(result['validation_info'].get('distance_to_target', 0.0)) for result in path_results]
+    path_lengths = []
+    for result in path_results:
+        coords = np.asarray(result.get('path_coordinates', []), dtype=np.float32)
+        path_lengths.append(
+            float(np.linalg.norm(np.diff(coords, axis=0), axis=1).sum())
+            if len(coords) > 1 else 0.0
+        )
     x = np.arange(len(labels))
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.5))
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4.5))
     axes[0].bar(x, exposures, color=colors[:len(labels)])
     axes[0].set_title('Ash Exposure')
-    axes[1].bar(x, rewards, color=colors[:len(labels)])
-    axes[1].set_title('Total Reward')
-    axes[2].bar(x, final_distances, color=colors[:len(labels)])
-    axes[2].set_title('Final Distance')
+    axes[1].bar(x, path_lengths, color=colors[:len(labels)])
+    axes[1].set_title('Path Length')
+    axes[2].bar(x, rewards, color=colors[:len(labels)])
+    axes[2].set_title('Total Reward')
+    axes[3].bar(x, final_distances, color=colors[:len(labels)])
+    axes[3].set_title('Final Distance')
     for ax in axes:
         ax.set_xticks(x, labels)
         ax.set_xlabel('Safety Factor')
@@ -695,9 +717,10 @@ def export_safety_factor_comparison(model_dir: str,
                 'total_reward': result['total_reward'],
                 'ash_exposure': result['validation_info'].get('ash_exposure', 0.0),
                 'final_distance': result['validation_info'].get('distance_to_target', 0.0),
-                'path_progress_ratio': result['validation_info'].get('path_progress_ratio', 0.0)
+                'path_progress_ratio': result['validation_info'].get('path_progress_ratio', 0.0),
+                'path_length': path_lengths[index]
             }
-            for result in path_results
+            for index, result in enumerate(path_results)
         ]
     }
     with open(summary_path, 'w', encoding='utf-8') as f:
@@ -726,15 +749,17 @@ def save_safety_factor_multi_scene_overview(comparisons: List[Dict],
     ]
     exposure_matrix = np.full((len(valid), len(safety_values)), np.nan, dtype=np.float32)
     distance_matrix = np.full_like(exposure_matrix, np.nan)
+    length_matrix = np.full_like(exposure_matrix, np.nan)
     for scene_index, item in enumerate(valid):
         for run in item.get('runs', []):
             safety = float(run['safety_factor'])
             col = safety_values.index(safety)
             exposure_matrix[scene_index, col] = float(run.get('ash_exposure', np.nan))
             distance_matrix[scene_index, col] = float(run.get('final_distance', np.nan))
+            length_matrix[scene_index, col] = float(run.get('path_length', np.nan))
 
     overview_path = os.path.join(output_dir, 'safety_factor_multi_scene_overview.png')
-    fig, axes = plt.subplots(2, 1, figsize=(13, max(8, len(valid) * 0.9)))
+    fig, axes = plt.subplots(3, 1, figsize=(13, max(10, len(valid) * 1.1)))
     y = np.arange(len(valid))
     bar_height = 0.8 / max(1, len(safety_values))
     colors = ['#2e7d32', '#f9a825', '#c62828', '#1565c0', '#6a1b9a']
@@ -749,6 +774,13 @@ def save_safety_factor_multi_scene_overview(comparisons: List[Dict],
         )
         axes[1].barh(
             y + offset,
+            length_matrix[:, index],
+            height=bar_height,
+            color=colors[index % len(colors)],
+            label=f'safety {safety:.2f}'
+        )
+        axes[2].barh(
+            y + offset,
             distance_matrix[:, index],
             height=bar_height,
             color=colors[index % len(colors)],
@@ -757,8 +789,10 @@ def save_safety_factor_multi_scene_overview(comparisons: List[Dict],
 
     axes[0].set_title('Ash Exposure Across Safety Factors and Scenes')
     axes[0].set_xlabel('Ash Exposure')
-    axes[1].set_title('Final Distance Across Safety Factors and Scenes')
-    axes[1].set_xlabel('Final Distance')
+    axes[1].set_title('Path Length Across Safety Factors and Scenes')
+    axes[1].set_xlabel('Path Length')
+    axes[2].set_title('Final Distance Across Safety Factors and Scenes')
+    axes[2].set_xlabel('Final Distance')
     for ax in axes:
         ax.set_yticks(y, scene_labels)
         ax.grid(True, axis='x', alpha=0.25)
@@ -786,19 +820,29 @@ def export_safety_factor_comparison_batch(model_dir: str,
                                           ash_decay_rate: Optional[float],
                                           ash_turbulence_drift: Optional[float],
                                           safety_factor_values: Sequence[float],
-                                          scene_count: int) -> Optional[Dict]:
+                                          scene_count: int,
+                                          candidate_multiplier: int = 8,
+                                          min_exposure_diff: float = 1.0,
+                                          min_path_length_diff: float = 35.0,
+                                          min_max_exposure: float = 2.0,
+                                          require_all_success: bool = True,
+                                          require_high_safety_lower_exposure: bool = True) -> Optional[Dict]:
     scene_count = max(1, int(scene_count))
     root_dir = os.path.join(output_dir, 'safety_factor_comparison')
     os.makedirs(root_dir, exist_ok=True)
     base_seed = seed if random_scene_seed is None else random_scene_seed
     comparisons = []
-    for index in range(scene_count):
-        scene_seed = base_seed + index
+    rejected = []
+    max_candidates = max(scene_count, scene_count * max(1, int(candidate_multiplier)))
+    candidate_index = 0
+    while len(comparisons) < scene_count and candidate_index < max_candidates:
+        scene_seed = base_seed + candidate_index
         scene_name = (
-            f'随机旋转GMM_安全系数对比_{index + 1:02d}_seed{scene_seed}'
+            f'随机旋转GMM_安全系数对比_{len(comparisons) + 1:02d}_seed{scene_seed}'
             if random_ash_scenes
             else base_scene_name
         )
+        subdir = os.path.join('safety_factor_comparison', f'scene_{len(comparisons) + 1:02d}_seed{scene_seed}')
         comparison = export_safety_factor_comparison(
             model_dir=model_dir,
             output_dir=output_dir,
@@ -806,7 +850,7 @@ def export_safety_factor_comparison_batch(model_dir: str,
             scene_name=scene_name,
             cruise_speed=cruise_speed,
             fixed_scene_maps=fixed_scene_maps,
-            seed=seed + index,
+            seed=seed + candidate_index,
             max_steps=max_steps,
             random_ash_scenes=random_ash_scenes,
             random_centers_range=random_centers_range,
@@ -817,14 +861,65 @@ def export_safety_factor_comparison_batch(model_dir: str,
             ash_decay_rate=ash_decay_rate,
             ash_turbulence_drift=ash_turbulence_drift,
             safety_factor_values=safety_factor_values,
-            output_subdir=os.path.join('safety_factor_comparison', f'scene_{index + 1:02d}_seed{scene_seed}')
+            output_subdir=subdir
         )
-        if comparison:
+        candidate_index += 1
+        if not comparison:
+            continue
+
+        exposures = [float(run.get('ash_exposure', 0.0)) for run in comparison.get('runs', [])]
+        lengths = [float(run.get('path_length', 0.0)) for run in comparison.get('runs', [])]
+        successes = [bool(run.get('success', False)) for run in comparison.get('runs', [])]
+        runs_by_safety = {
+            float(run.get('safety_factor', 0.0)): run
+            for run in comparison.get('runs', [])
+        }
+        min_safety = min(runs_by_safety.keys()) if runs_by_safety else 0.0
+        max_safety = max(runs_by_safety.keys()) if runs_by_safety else 0.0
+        high_safety_has_lower_exposure = True
+        if runs_by_safety and min_safety != max_safety:
+            high_safety_has_lower_exposure = (
+                float(runs_by_safety[max_safety].get('ash_exposure', 0.0))
+                < float(runs_by_safety[min_safety].get('ash_exposure', 0.0))
+            )
+        exposure_diff = max(exposures) - min(exposures) if exposures else 0.0
+        length_diff = max(lengths) - min(lengths) if lengths else 0.0
+        max_exposure = max(exposures) if exposures else 0.0
+        is_informative = (
+            (not require_all_success or all(successes))
+            and
+            (not require_high_safety_lower_exposure or high_safety_has_lower_exposure)
+            and
+            max_exposure >= min_max_exposure
+            and (
+                exposure_diff >= min_exposure_diff
+                or length_diff >= min_path_length_diff
+            )
+        )
+        if is_informative or candidate_index >= max_candidates:
             comparisons.append(comparison)
+        else:
+            rejected.append({
+                'scene_name': comparison.get('scene_name'),
+                'seed': scene_seed,
+                'max_exposure': max_exposure,
+                'exposure_diff': exposure_diff,
+                'path_length_diff': length_diff,
+                'all_success': all(successes),
+                'high_safety_has_lower_exposure': high_safety_has_lower_exposure
+            })
+            for output in comparison.get('outputs', []):
+                parent = os.path.dirname(output)
+                if os.path.isdir(parent):
+                    shutil.rmtree(parent, ignore_errors=True)
+                    break
 
     overview_path = save_safety_factor_multi_scene_overview(comparisons, root_dir)
     summary = {
         'scene_count': len(comparisons),
+        'candidate_count': candidate_index,
+        'rejected_count': len(rejected),
+        'rejected': rejected,
         'overview_path': overview_path,
         'comparisons': comparisons
     }
@@ -1009,6 +1104,18 @@ def main():
                         help='Render same-scene low/medium/high safety factor path comparison assets.')
     parser.add_argument('--safety-factor-comparison-scenes', type=int, default=1,
                         help='Number of random scenes rendered for safety factor comparison.')
+    parser.add_argument('--safety-factor-candidate-multiplier', type=int, default=8,
+                        help='How many random candidates to try per accepted safety comparison scene.')
+    parser.add_argument('--min-safety-exposure-diff', type=float, default=1.0,
+                        help='Minimum ash exposure spread required for an informative safety comparison scene.')
+    parser.add_argument('--min-safety-path-length-diff', type=float, default=35.0,
+                        help='Minimum path length spread required for an informative safety comparison scene.')
+    parser.add_argument('--min-safety-max-exposure', type=float, default=2.0,
+                        help='Minimum maximum ash exposure required for an informative safety comparison scene.')
+    parser.add_argument('--allow-failed-safety-comparison', action='store_true',
+                        help='Allow safety comparison scenes where some safety factors fail to reach the target.')
+    parser.add_argument('--allow-high-safety-higher-exposure', action='store_true',
+                        help='Allow scenes where the highest safety factor has higher exposure than the lowest safety factor.')
     parser.add_argument('--safety-factor-values', type=parse_float_list, default=[0.6, 1.0, 1.8],
                         help='Comma-separated safety factors for comparison, e.g. 0.6,1.0,1.8.')
     args = parser.parse_args()
@@ -1108,7 +1215,13 @@ def main():
             ash_decay_rate=args.ash_decay_rate,
             ash_turbulence_drift=args.ash_turbulence_drift,
             safety_factor_values=args.safety_factor_values,
-            scene_count=args.safety_factor_comparison_scenes
+            scene_count=args.safety_factor_comparison_scenes,
+            candidate_multiplier=args.safety_factor_candidate_multiplier,
+            min_exposure_diff=args.min_safety_exposure_diff,
+            min_path_length_diff=args.min_safety_path_length_diff,
+            min_max_exposure=args.min_safety_max_exposure,
+            require_all_success=not args.allow_failed_safety_comparison,
+            require_high_safety_lower_exposure=not args.allow_high_safety_higher_exposure
         )
 
     summary_path = os.path.join(args.output_dir, 'asset_summary.json')
