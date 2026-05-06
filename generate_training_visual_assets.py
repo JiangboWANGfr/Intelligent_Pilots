@@ -1248,7 +1248,7 @@ def export_checkpoint_animations(model_dir: str,
 
     selected_demo = None
     rollout_base_seed = seed
-    if avoidance_demo_scene:
+    if avoidance_demo_scene and not vary_scene_per_checkpoint:
         selected_demo = select_avoidance_demo_candidate(
             env=env,
             seed=seed,
@@ -1271,7 +1271,7 @@ def export_checkpoint_animations(model_dir: str,
     ))
 
     outputs = []
-    for label, model_path in milestones:
+    for milestone_index, (label, model_path) in enumerate(milestones):
         try:
             if model_path is None:
                 algorithm = 'td3'
@@ -1284,17 +1284,32 @@ def export_checkpoint_animations(model_dir: str,
             outputs.append({'label': label, 'model_path': model_path, 'skipped': str(exc)})
             continue
 
+        run_demo = selected_demo
+        milestone_episode = checkpoint_episode(model_path) if model_path else 0
+        if avoidance_demo_scene and vary_scene_per_checkpoint:
+            run_demo = select_avoidance_demo_candidate(
+                env=env,
+                seed=seed + milestone_episode + milestone_index * max(1, avoidance_candidate_count),
+                candidate_count=avoidance_candidate_count,
+                vary_scene_per_checkpoint=True,
+                min_direct_max_risk=min_demo_direct_max_risk,
+                min_direct_mean_risk=min_demo_direct_mean_risk,
+                force_cloud_crossing_endpoints=force_avoidance_endpoints
+            )
+
         env.scene_cursor = -1
         if hasattr(env, 'random_scene_counter'):
-            if selected_demo is not None and not vary_scene_per_checkpoint:
-                env.random_scene_counter = int(selected_demo.get('scene_counter', 0))
+            if run_demo is not None:
+                env.random_scene_counter = int(run_demo.get('scene_counter', 0))
             elif vary_scene_per_checkpoint:
-                env.random_scene_counter = checkpoint_episode(model_path) if model_path else 0
+                env.random_scene_counter = milestone_episode
             else:
                 env.random_scene_counter = 0
         rollout_seed = rollout_base_seed
-        if vary_scene_per_checkpoint:
-            rollout_seed = rollout_base_seed + (checkpoint_episode(model_path) if model_path else 0)
+        if run_demo is not None:
+            rollout_seed = int(run_demo.get('seed', rollout_seed))
+        elif vary_scene_per_checkpoint:
+            rollout_seed = rollout_base_seed + milestone_episode
         path_result = simulate_episode(
             env=env,
             agent=agent,
@@ -1303,8 +1318,8 @@ def export_checkpoint_animations(model_dir: str,
             scene_label=scene_name,
             milestone_label=label,
             forced_start_target=(
-                selected_demo.get('forced_start_target')
-                if selected_demo is not None else None
+                run_demo.get('forced_start_target')
+                if run_demo is not None else None
             )
         )
         exporter = ValidationAnimationExporter(env.config, env.concentration_map)
@@ -1327,7 +1342,7 @@ def export_checkpoint_animations(model_dir: str,
                 'total_reward': path_result['total_reward'],
                 'max_concentration': path_result['max_concentration'],
                 'final_distance': path_result['validation_info']['distance_to_target'],
-                'avoidance_demo_candidate': selected_demo,
+                'avoidance_demo_candidate': run_demo,
                 **export_info
             })
         except Exception as exc:
