@@ -165,6 +165,21 @@
             border-radius: 6px;
             background: #161a26;
         }
+        .map-click-preview {
+            cursor: crosshair;
+            border: 1px solid #3c4358;
+        }
+        .pixel-status {
+            margin-top: 6px;
+            padding: 6px;
+            border-radius: 4px;
+            background: rgba(10, 12, 18, 0.55);
+            color: #cbd5e1;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .mode-row { display: flex; gap: 6px; margin-top: 6px; }
+        .mode-row .btn { flex: 1; padding: 6px 8px; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         #controlPanel::-webkit-scrollbar { width: 6px; }
@@ -192,6 +207,35 @@
                 <input type="file" id="validationImageInput" accept="image/*" style="display:none" onchange="handleValidationImageSelect(event)">
                 <span id="validationFileName" class="muted-text">未选择图片</span>
                 <img id="validationImagePreview" class="media-preview" alt="现实图预览">
+                <div class="form-grid" style="margin-top:10px;">
+                    <div class="field-group">
+                        <label for="validationConversionMode">转换模式</label>
+                        <select id="validationConversionMode" class="input-control">
+                            <option value="auto">自动</option>
+                            <option value="color" selected>颜色分级图</option>
+                            <option value="grayscale">灰度图</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="validationBlurKernel">平滑核</label>
+                        <input id="validationBlurKernel" class="input-control" type="number" step="2" value="5">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationImageHeight">输出高度</label>
+                        <input id="validationImageHeight" class="input-control" type="number" step="1" value="768">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationImageWidth">输出宽度</label>
+                        <input id="validationImageWidth" class="input-control" type="number" step="1" value="768">
+                    </div>
+                </div>
+                <button id="convertValidationImageBtn" class="btn btn-full" onclick="convertValidationImage()">转换并预览标准火山灰图</button>
+                <div class="mode-row">
+                    <button class="btn" onclick="setValidationPickMode('start')">点击设置起点</button>
+                    <button class="btn" onclick="setValidationPickMode('target')">点击设置终点</button>
+                </div>
+                <div id="validationPixelStatus" class="pixel-status">转换后可在标准图上点击设置起点和终点。</div>
+                <img id="validationConvertedPreview" class="media-preview map-click-preview" alt="标准火山灰浓度图" onclick="handleConvertedMapClick(event)">
                 <div class="form-grid" style="margin-top:10px;">
                     <div class="field-group">
                         <label for="validationSceneName">场景名称</label>
@@ -356,6 +400,10 @@ let validationImageFile = null;
 let validationPreviewUrl = null;
 let validationBaseConfig = null;
 let latestValidationResponse = null;
+let validationConvertedMap = null;
+let validationPickMode = 'start';
+let validationStartPixel = null;
+let validationTargetPixel = null;
 
 // ===== 动态云状态 =====
 let cloudAnimStartTime = null;      // 云动画开始时间（ms）
@@ -608,7 +656,129 @@ function handleValidationImageSelect(event) {
     fileNameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     previewEl.src = validationPreviewUrl;
     previewEl.style.display = 'block';
+    validationConvertedMap = null;
+    validationStartPixel = null;
+    validationTargetPixel = null;
+    const convertedPreview = document.getElementById('validationConvertedPreview');
+    convertedPreview.removeAttribute('src');
+    convertedPreview.style.display = 'none';
+    updateValidationPixelStatus();
     setValidationStatus('图片已选择，可直接生成验证动画。');
+}
+
+function updateValidationPixelStatus() {
+    const status = document.getElementById('validationPixelStatus');
+    const mapText = validationConvertedMap
+        ? `标准图: ${validationConvertedMap.width}×${validationConvertedMap.height}`
+        : '标准图: 未转换';
+    const startText = validationStartPixel
+        ? `起点: x=${validationStartPixel.x}, y=${validationStartPixel.y}`
+        : '起点: 未设置';
+    const targetText = validationTargetPixel
+        ? `终点: x=${validationTargetPixel.x}, y=${validationTargetPixel.y}`
+        : '终点: 未设置';
+    status.textContent = `${mapText} | ${startText} | ${targetText} | 当前点击: ${validationPickMode === 'start' ? '起点' : '终点'}`;
+}
+
+function setValidationPickMode(mode) {
+    validationPickMode = mode === 'target' ? 'target' : 'start';
+    updateValidationPixelStatus();
+}
+
+function pixelToGeo(pixel) {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
+    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
+    const spanLat = getNumericInputValue('validationSpanLat', 2.0);
+    const spanLon = getNumericInputValue('validationSpanLon', 2.0);
+    const height = Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768)));
+    const width = Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)));
+    return {
+        lat: centerLat + (0.5 - pixel.y / height) * spanLat,
+        lon: centerLon + (pixel.x / width - 0.5) * spanLon
+    };
+}
+
+function applyPixelToGeoInputs() {
+    if (validationStartPixel) {
+        const geo = pixelToGeo(validationStartPixel);
+        document.getElementById('validationStartLat').value = geo.lat.toFixed(4);
+        document.getElementById('validationStartLon').value = geo.lon.toFixed(4);
+    }
+    if (validationTargetPixel) {
+        const geo = pixelToGeo(validationTargetPixel);
+        document.getElementById('validationTargetLat').value = geo.lat.toFixed(4);
+        document.getElementById('validationTargetLon').value = geo.lon.toFixed(4);
+    }
+}
+
+function handleConvertedMapClick(event) {
+    if (!validationConvertedMap) {
+        setValidationStatus('请先转换现实图。', 'error');
+        return;
+    }
+    const img = event.currentTarget;
+    const rect = img.getBoundingClientRect();
+    const x = Math.round((event.clientX - rect.left) / Math.max(rect.width, 1) * validationConvertedMap.width);
+    const y = Math.round((event.clientY - rect.top) / Math.max(rect.height, 1) * validationConvertedMap.height);
+    const pixel = {
+        x: Math.max(0, Math.min(validationConvertedMap.width - 1, x)),
+        y: Math.max(0, Math.min(validationConvertedMap.height - 1, y))
+    };
+    if (validationPickMode === 'start') {
+        validationStartPixel = pixel;
+        validationPickMode = 'target';
+    } else {
+        validationTargetPixel = pixel;
+        validationPickMode = 'start';
+    }
+    applyPixelToGeoInputs();
+    updateValidationPixelStatus();
+}
+
+async function convertValidationImage() {
+    if (!validationImageFile) {
+        setValidationStatus('请先选择一张现实图。', 'error');
+        return;
+    }
+    const button = document.getElementById('convertValidationImageBtn');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '转换中...';
+    setValidationStatus('正在把现实图转换为标准火山灰浓度图...', 'busy');
+    try {
+        const formData = new FormData();
+        formData.append('image_file', validationImageFile);
+        formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
+        formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
+        formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('image_size', JSON.stringify([
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+        ]));
+        formData.append('config', JSON.stringify(buildValidationConfigPayload()));
+
+        const response = await fetch('/api/convert-image', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '转换失败');
+        }
+        validationConvertedMap = {
+            width: result.summary.shape[1],
+            height: result.summary.shape[0],
+            result
+        };
+        const preview = document.getElementById('validationConvertedPreview');
+        preview.src = withCacheBust(result.output_urls.preview_path);
+        preview.style.display = 'block';
+        updateValidationPixelStatus();
+        setValidationStatus('标准火山灰图已生成。可在图上点击设置起点和终点。', 'success');
+    } catch (error) {
+        console.error('Image conversion failed:', error);
+        setValidationStatus(`转换失败：${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
 }
 
 function applySuggestedRoute() {
@@ -629,6 +799,11 @@ function buildValidationConfigPayload() {
     payload.geo_center_lon = getNumericInputValue('validationCenterLon', 120.0);
     payload.geo_span_lat = getNumericInputValue('validationSpanLat', 2.0);
     payload.geo_span_lon = getNumericInputValue('validationSpanLon', 2.0);
+    payload.image_size = [
+        Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
+        Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+    ];
+    payload.concentration_threshold = getNumericInputValue('validationFallbackLimit', 0.3);
     return payload;
 }
 
@@ -685,6 +860,16 @@ async function runValidationFromImage() {
         formData.append('fallback_concentration_limit', String(getNumericInputValue('validationFallbackLimit', 0.3)));
         formData.append('animation_fps', String(Math.max(1, Math.round(getNumericInputValue('validationFps', 12)))));
         formData.append('animation_max_frames', String(Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)))));
+        formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
+        formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('image_size', JSON.stringify([
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+        ]));
+        if (validationStartPixel && validationTargetPixel) {
+            formData.append('start_pixel', JSON.stringify([validationStartPixel.x, validationStartPixel.y]));
+            formData.append('target_pixel', JSON.stringify([validationTargetPixel.x, validationTargetPixel.y]));
+        }
         formData.append('config', JSON.stringify(buildValidationConfigPayload()));
 
         const response = await fetch('/api/validate-image', {
@@ -1320,6 +1505,10 @@ async function loadValidationDefaults() {
         document.getElementById('validationCenterLon').value = centerLon.toFixed(4);
         document.getElementById('validationSpanLat').value = spanLat.toFixed(2);
         document.getElementById('validationSpanLon').value = spanLon.toFixed(2);
+        if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
+            document.getElementById('validationImageHeight').value = Math.round(Number(config.image_size[0]) || 768);
+            document.getElementById('validationImageWidth').value = Math.round(Number(config.image_size[1]) || 768);
+        }
         if (Number.isFinite(Number(config.concentration_threshold))) {
             document.getElementById('validationFallbackLimit').value = Number(config.concentration_threshold).toFixed(2);
         }

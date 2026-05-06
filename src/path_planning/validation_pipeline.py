@@ -42,8 +42,10 @@ class ValidationPipeline:
 
     def validate_image(self,
                        image_source: Union[str, np.ndarray],
-                       start_geo: Tuple[float, float],
-                       target_geo: Tuple[float, float],
+                       start_geo: Optional[Tuple[float, float]] = None,
+                       target_geo: Optional[Tuple[float, float]] = None,
+                       start_pixel: Optional[Tuple[float, float]] = None,
+                       target_pixel: Optional[Tuple[float, float]] = None,
                        output_json_path: Optional[str] = None,
                        output_plot_path: Optional[str] = None,
                        scene_name: str = 'image_validation_scene',
@@ -53,15 +55,41 @@ class ValidationPipeline:
                        animation_video_path: Optional[str] = None,
                        animation_fps: int = 12,
                        animation_save_frames: bool = False,
-                       animation_max_frames: int = 180) -> Dict:
-        converted = self.converter.convert_to_scene(image_source, scene_name=scene_name)
+                       animation_max_frames: int = 180,
+                       conversion_mode: str = 'auto',
+                       invert: Union[bool, str] = 'auto',
+                       blur_kernel: int = 5,
+                       conversion_output_dir: Optional[str] = None) -> Dict:
+        converted = self.converter.convert_to_scene(
+            image_source,
+            scene_name=scene_name,
+            mode=conversion_mode,
+            invert=invert,
+            blur_kernel=blur_kernel
+        )
         derived_config = converted['config']
         concentration_map = converted['concentration_map']
+        conversion_outputs = None
+        if conversion_output_dir:
+            conversion_outputs = self.converter.save_standard_outputs(
+                concentration_map,
+                conversion_output_dir,
+                prefix='real_ash'
+            )
 
         planner = PathPlanner(derived_config, self.ensure_agent())
         planner.set_external_concentration_map(concentration_map, scene_name=scene_name)
 
-        start_pixel, target_pixel = planner.convert_geo_input(start_geo, target_geo)
+        if start_pixel is not None and target_pixel is not None:
+            start_pixel = self._normalize_pixel_pair(start_pixel, derived_config)
+            target_pixel = self._normalize_pixel_pair(target_pixel, derived_config)
+            start_geo = self._pixel_to_geo(planner, start_pixel)
+            target_geo = self._pixel_to_geo(planner, target_pixel)
+        else:
+            if start_geo is None or target_geo is None:
+                raise ValueError('Either geo coordinates or pixel coordinates are required')
+            start_pixel, target_pixel = planner.convert_geo_input(start_geo, target_geo)
+
         max_allowed = float(
             fallback_concentration_limit
             if fallback_concentration_limit is not None
@@ -73,7 +101,12 @@ class ValidationPipeline:
         fallback_reason = ''
         if planner.agent is not None:
             try:
-                rl_result = planner.plan_path_geo(start_geo, target_geo, max_steps=500)
+                rl_result = planner.plan_path(tuple(start_pixel), tuple(target_pixel), max_steps=500)
+                rl_result['start_geo'] = list(start_geo)
+                rl_result['target_geo'] = list(target_geo)
+                rl_result['start_pixel'] = list(start_pixel)
+                rl_result['target_pixel'] = list(target_pixel)
+                rl_result['cloud_info'] = rl_result.get('cloud_info') or planner.build_cloud_info()
             except Exception as exc:
                 fallback_reason = f'rl_error:{exc}'
 
@@ -109,6 +142,7 @@ class ValidationPipeline:
                 'fallback_summary': fallback_summary,
                 'source_image': image_source if isinstance(image_source, str) else 'array_input',
                 'conversion_summary': converted['summary'],
+                'conversion_outputs': conversion_outputs,
                 'scene_name': scene_name
             }
             if rl_result is not None:
@@ -124,6 +158,7 @@ class ValidationPipeline:
                 'fallback_reason': '',
                 'source_image': image_source if isinstance(image_source, str) else 'array_input',
                 'conversion_summary': converted['summary'],
+                'conversion_outputs': conversion_outputs,
                 'scene_name': scene_name
             }
 
@@ -158,6 +193,26 @@ class ValidationPipeline:
             path_result['validation_info']['animation_export'] = animation_export
 
         return path_result
+
+    @staticmethod
+    def _normalize_pixel_pair(pixel_pair: Tuple[float, float],
+                              config: VolcanicAshConfig) -> Tuple[int, int]:
+        if len(pixel_pair) < 2:
+            raise ValueError('Pixel coordinate must contain x and y values')
+        x = int(round(float(pixel_pair[0])))
+        y = int(round(float(pixel_pair[1])))
+        height, width = tuple(config.image_size)
+        return (
+            int(np.clip(y, 0, height - 1)),
+            int(np.clip(x, 0, width - 1))
+        )
+
+    @staticmethod
+    def _pixel_to_geo(planner: PathPlanner,
+                      pixel_pair_yx: Tuple[int, int]) -> Tuple[float, float]:
+        y, x = pixel_pair_yx
+        lat, lon = planner.ash_model.pixel_to_geo(int(x), int(y))
+        return float(lat), float(lon)
 
     def export_validation_animation(self,
                                   path_result: Dict,

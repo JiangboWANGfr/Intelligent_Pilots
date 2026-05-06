@@ -35,8 +35,20 @@ class AshImageConverter:
                                    image_source: Union[str, np.ndarray],
                                    invert: Union[bool, str] = 'auto',
                                    blur_kernel: int = 5,
-                                   clip_percentiles: Tuple[float, float] = (2.0, 98.0)) -> np.ndarray:
+                                   clip_percentiles: Tuple[float, float] = (2.0, 98.0),
+                                   mode: str = 'auto') -> np.ndarray:
         image = self.load_image(image_source)
+        conversion_mode = str(mode or 'auto').lower()
+        if conversion_mode == 'auto':
+            conversion_mode = self._choose_conversion_mode(image)
+        if conversion_mode == 'color':
+            return self._image_to_concentration_map_color(
+                image,
+                blur_kernel=blur_kernel
+            )
+        if conversion_mode not in {'grayscale', 'gray'}:
+            raise ValueError(f'Unsupported conversion mode: {mode}')
+
         grayscale = self._to_grayscale(image)
         resized = cv2.resize(
             grayscale,
@@ -60,6 +72,73 @@ class AshImageConverter:
 
         concentration_map = np.power(np.clip(normalized, 0.0, 1.0), 1.15)
         return concentration_map.astype(np.float32)
+
+    def _choose_conversion_mode(self, image: np.ndarray) -> str:
+        if image.ndim != 3 or image.shape[2] < 3:
+            return 'grayscale'
+        bgr = image[:, :, :3]
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        saturation = hsv[:, :, 1].astype(np.float32) / 255.0
+        value = hsv[:, :, 2].astype(np.float32) / 255.0
+        colorful_ratio = float(np.mean((saturation > 0.18) & (value > 0.18)))
+        return 'color' if colorful_ratio > 0.01 else 'grayscale'
+
+    def _image_to_concentration_map_color(self,
+                                          image: np.ndarray,
+                                          blur_kernel: int = 3) -> np.ndarray:
+        if image.ndim == 2:
+            return self.image_to_concentration_map(
+                image,
+                mode='grayscale',
+                blur_kernel=blur_kernel
+            )
+        if image.ndim == 3 and image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+        if image.ndim != 3 or image.shape[2] < 3:
+            raise ValueError(f'Unsupported image shape for color conversion: {image.shape}')
+
+        bgr = cv2.resize(
+            image[:, :, :3],
+            (self.base_config.image_size[1], self.base_config.image_size[0]),
+            interpolation=cv2.INTER_AREA
+        )
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        hue = hsv[:, :, 0].astype(np.float32)
+        saturation = hsv[:, :, 1].astype(np.float32) / 255.0
+        value = hsv[:, :, 2].astype(np.float32) / 255.0
+
+        concentration = np.zeros(hue.shape, dtype=np.float32)
+        colorful = (saturation > 0.18) & (value > 0.15)
+        dark_linework = value < 0.18
+        bright_background = (value > 0.86) & (saturation < 0.18)
+        plume_mask = colorful & ~dark_linework & ~bright_background
+
+        red = (hue <= 10) | (hue >= 170)
+        orange = (hue > 10) & (hue <= 25)
+        yellow = (hue > 25) & (hue <= 40)
+        green = (hue > 40) & (hue <= 85)
+        cyan_blue = (hue > 85) & (hue <= 135)
+        violet = (hue > 135) & (hue < 170)
+
+        concentration[plume_mask & red] = 1.0
+        concentration[plume_mask & orange] = 0.78
+        concentration[plume_mask & yellow] = 0.55
+        concentration[plume_mask & green] = 0.30
+        concentration[plume_mask & cyan_blue] = 0.24
+        concentration[plume_mask & violet] = 0.42
+
+        # Preserve faint colored plume edges without treating map grid/coastline as ash.
+        edge_strength = np.clip((saturation - 0.18) / 0.55, 0.0, 1.0)
+        concentration = np.maximum(concentration, plume_mask.astype(np.float32) * edge_strength * 0.22)
+
+        if blur_kernel > 1:
+            kernel = blur_kernel if blur_kernel % 2 == 1 else blur_kernel + 1
+            concentration = cv2.GaussianBlur(concentration, (kernel, kernel), 0)
+
+        max_value = float(np.max(concentration))
+        if max_value > 1e-6:
+            concentration = concentration / max_value
+        return np.clip(concentration, 0.0, 1.0).astype(np.float32)
 
     def estimate_scene_config(self,
                               concentration_map: np.ndarray,
@@ -150,14 +229,50 @@ class AshImageConverter:
     def convert_to_scene(self,
                          image_source: Union[str, np.ndarray],
                          scene_name: str = 'image_derived_scene',
-                         invert: Union[bool, str] = 'auto') -> Dict:
-        concentration_map = self.image_to_concentration_map(image_source, invert=invert)
+                         invert: Union[bool, str] = 'auto',
+                         mode: str = 'auto',
+                         blur_kernel: int = 5) -> Dict:
+        concentration_map = self.image_to_concentration_map(
+            image_source,
+            invert=invert,
+            mode=mode,
+            blur_kernel=blur_kernel
+        )
         config = self.estimate_scene_config(concentration_map, scene_name=scene_name)
         return {
             'concentration_map': concentration_map,
             'config': config,
             'summary': self.summarize_map(concentration_map)
         }
+
+    def save_standard_outputs(self,
+                              concentration_map: np.ndarray,
+                              output_dir: str,
+                              prefix: str = 'real_ash') -> Dict[str, str]:
+        os.makedirs(output_dir, exist_ok=True)
+        map_array = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
+        npy_path = os.path.join(output_dir, f'{prefix}_concentration.npy')
+        grayscale_path = os.path.join(output_dir, f'{prefix}_concentration.png')
+        preview_path = os.path.join(output_dir, f'{prefix}_classified_preview.png')
+
+        np.save(npy_path, map_array)
+        cv2.imwrite(grayscale_path, (map_array * 255.0).astype(np.uint8))
+        cv2.imwrite(preview_path, cv2.cvtColor(self.build_classified_preview(map_array), cv2.COLOR_RGB2BGR))
+        return {
+            'npy_path': npy_path,
+            'grayscale_path': grayscale_path,
+            'preview_path': preview_path
+        }
+
+    def build_classified_preview(self, concentration_map: np.ndarray) -> np.ndarray:
+        map_array = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
+        threshold = float(getattr(self.base_config, 'concentration_threshold', 0.3))
+        rgb = np.full((map_array.shape[0], map_array.shape[1], 3), 245, dtype=np.uint8)
+        rgb[(map_array >= threshold * 0.15) & (map_array < threshold * 0.5)] = (0, 255, 0)
+        rgb[(map_array >= threshold * 0.5) & (map_array < threshold)] = (255, 255, 0)
+        rgb[(map_array >= threshold) & (map_array < threshold * 1.5)] = (255, 165, 0)
+        rgb[map_array >= threshold * 1.5] = (255, 0, 0)
+        return rgb
 
     def _to_grayscale(self, image: np.ndarray) -> np.ndarray:
         if image.ndim == 2:

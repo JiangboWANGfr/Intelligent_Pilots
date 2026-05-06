@@ -55,6 +55,39 @@ def _parse_int(value, default):
     except (TypeError, ValueError):
         return default
 
+def _parse_size_pair(value, default):
+    if value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            value = [part.strip() for part in value.split(',')]
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        height = max(1, _parse_int(value[0], default[0]))
+        width = max(1, _parse_int(value[1], default[1]))
+        return height, width
+    return default
+
+def _parse_pixel_pair(payload, pair_key, x_key, y_key):
+    raw = payload.get(pair_key)
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = None
+    if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        x = _parse_float(raw[0])
+        y = _parse_float(raw[1])
+        if x is not None and y is not None:
+            return x, y
+
+    x = _parse_float(payload.get(x_key))
+    y = _parse_float(payload.get(y_key))
+    if x is None or y is None:
+        return None
+    return x, y
+
 def _parse_geo_pair(payload, pair_key, lat_key, lon_key, default):
     raw = payload.get(pair_key)
     if isinstance(raw, str):
@@ -83,7 +116,10 @@ def _load_validation_config(payload):
             config_payload = {}
 
     if isinstance(config_payload, dict) and config_payload:
-        return VolcanicAshConfig.from_dict(config_payload)
+        config = VolcanicAshConfig.from_dict(config_payload)
+        if 'image_size' in config_payload:
+            config.image_size = _parse_size_pair(config_payload.get('image_size'), config.image_size)
+        return config
 
     current_config_path = os.path.join(OUTPUT_DIR, 'current_config.json')
     if os.path.exists(current_config_path):
@@ -175,6 +211,16 @@ def build_agent_for_config(config, model_path=None, allow_missing_model=False):
         agent.load_model(model_path)
 
     return agent
+
+def _apply_conversion_request_config(config, payload):
+    config.image_size = _parse_size_pair(
+        payload.get('image_size'),
+        tuple(getattr(config, 'image_size', (768, 768)))
+    )
+    threshold = _parse_float(payload.get('concentration_threshold'))
+    if threshold is not None:
+        config.concentration_threshold = threshold
+    return config
 
 @app.route('/')
 def serve_index():
@@ -372,7 +418,7 @@ def validate_image():
     from src.path_planning.validation_pipeline import ValidationPipeline
      
     try:
-        config = _load_validation_config(data)
+        config = _apply_conversion_request_config(_load_validation_config(data), data)
         pipeline = ValidationPipeline(
             config=config,
             model_path=data.get('model_path', 'models/final_model.pth')
@@ -388,6 +434,10 @@ def validate_image():
 
         web_request = _parse_bool(data.get('web_request'), default=uploaded_file is not None)
         output_paths = _resolve_validation_output_paths(data, scene_name, web_request)
+        conversion_output_dir = data.get('conversion_output_dir') or os.path.join(
+            os.path.dirname(output_paths['output_json']),
+            'converted_map'
+        )
         default_start = (
             config.geo_center_lat - config.geo_span_lat * 0.35,
             config.geo_center_lon - config.geo_span_lon * 0.35
@@ -396,11 +446,19 @@ def validate_image():
             config.geo_center_lat + config.geo_span_lat * 0.35,
             config.geo_center_lon + config.geo_span_lon * 0.35
         )
+        start_pixel = _parse_pixel_pair(data, 'start_pixel', 'start_pixel_x', 'start_pixel_y')
+        target_pixel = _parse_pixel_pair(data, 'target_pixel', 'target_pixel_x', 'target_pixel_y')
          
         result = pipeline.validate_image(
             image_source=image_path,
-            start_geo=_parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start),
-            target_geo=_parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target),
+            start_geo=None if start_pixel is not None else _parse_geo_pair(
+                data, 'start_position', 'start_lat', 'start_lon', default_start
+            ),
+            target_geo=None if target_pixel is not None else _parse_geo_pair(
+                data, 'target_position', 'target_lat', 'target_lon', default_target
+            ),
+            start_pixel=start_pixel,
+            target_pixel=target_pixel,
             output_json_path=output_paths['output_json'],
             output_plot_path=output_paths['output_plot'],
             scene_name=scene_name,
@@ -410,7 +468,11 @@ def validate_image():
             animation_video_path=output_paths['animation_video_path'],
             animation_fps=_parse_int(data.get('animation_fps', 12), 12),
             animation_save_frames=_parse_bool(data.get('animation_save_frames', False), False),
-            animation_max_frames=_parse_int(data.get('animation_max_frames', 180), 180)
+            animation_max_frames=_parse_int(data.get('animation_max_frames', 180), 180),
+            conversion_mode=data.get('conversion_mode', 'auto'),
+            invert=data.get('invert', 'auto'),
+            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
+            conversion_output_dir=conversion_output_dir
         )
          
         manifest = pipeline.build_animation_export_manifest(
@@ -434,6 +496,11 @@ def validate_image():
             'animation_export': animation_export,
             'animation_gif_path': animation_gif_path,
             'animation_gif_url': _build_output_url(animation_gif_path),
+            'converted_map': result.get('validation_info', {}).get('conversion_outputs'),
+            'converted_map_urls': {
+                key: _build_output_url(value)
+                for key, value in (result.get('validation_info', {}).get('conversion_outputs') or {}).items()
+            },
             'source_image_path': image_path,
             'source_image_url': _build_output_url(image_path),
             'message': '图像验证路径生成完成！'
@@ -441,6 +508,57 @@ def validate_image():
 
         return jsonify(response_payload)
      
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/convert-image', methods=['POST'])
+def convert_image():
+    data = _parse_request_payload()
+
+    from src.generation.image_converter import AshImageConverter
+
+    try:
+        config = _apply_conversion_request_config(_load_validation_config(data), data)
+        scene_name = str(data.get('scene_name') or 'image_validation_scene')
+        uploaded_file = request.files.get('image_file')
+        image_path = data.get('image_path')
+        if uploaded_file and uploaded_file.filename:
+            image_path = _save_uploaded_image(uploaded_file, scene_name)
+        if not image_path:
+            raise ValueError('image_path or image_file is required')
+
+        converter = AshImageConverter(config)
+        converted = converter.convert_to_scene(
+            image_path,
+            scene_name=scene_name,
+            mode=data.get('conversion_mode', 'auto'),
+            invert=data.get('invert', 'auto'),
+            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5)
+        )
+        scene_slug = secure_filename(scene_name) or 'image_validation_scene'
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        output_dir = os.path.join(OUTPUT_DIR, 'web_converted_maps', f'{scene_slug}_{timestamp}')
+        outputs = converter.save_standard_outputs(
+            converted['concentration_map'],
+            output_dir,
+            prefix='real_ash'
+        )
+        config_path = os.path.join(output_dir, 'real_ash_config.json')
+        converted['config'].save(config_path)
+
+        return jsonify(_to_jsonable({
+            'success': True,
+            'scene_name': scene_name,
+            'summary': converted['summary'],
+            'config': converted['config'].to_dict(),
+            'config_path': config_path,
+            'config_url': _build_output_url(config_path),
+            'outputs': outputs,
+            'output_urls': {key: _build_output_url(value) for key, value in outputs.items()},
+            'source_image_path': image_path,
+            'source_image_url': _build_output_url(image_path),
+            'message': '现实图已转换为标准浓度图'
+        }))
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
