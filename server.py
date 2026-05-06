@@ -626,10 +626,12 @@ def serve_data_file(filename):
         return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
+    port = _parse_int(os.environ.get('PORT'), 5000)
+    host = os.environ.get('HOST', '0.0.0.0')
     print("=" * 60)
     print("Volcanic Ash Avoidance System - Web Server Starting")
     print("=" * 60)
-    print("Access URL: http://localhost:5000")
+    print(f"Access URL: http://localhost:{port}")
     print("API Endpoints:")
     print("  GET  /api/presets      - Get preset configs")
     print("  POST /api/generate     - Generate images")
@@ -640,4 +642,4 @@ if __name__ == '__main__':
     print("  POST /api/analyze      - Data analysis")
     print("=" * 60)
     
-    app.run(debug=True, use_reloader=False, port=5000, host='0.0.0.0')
+    app.run(debug=True, use_reloader=False, port=port, host=host)
