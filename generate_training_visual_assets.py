@@ -444,8 +444,12 @@ def simulate_episode(env: VolcanicAshEnv,
                      seed: int,
                      max_steps: int,
                      scene_label: str,
-                     milestone_label: str) -> Dict:
+                     milestone_label: str,
+                     forced_start_target: Optional[Tuple[Sequence[float], Sequence[float]]] = None) -> Dict:
     state, info = env.reset(seed=seed)
+    if forced_start_target is not None:
+        start_pos, target_pos = forced_start_target
+        state, info = env.initialize_flight(start_pos, target_pos, reference_path=None)
     concentration_maps = []
     if getattr(env.config, 'enable_dynamic_ash', False):
         concentration_maps.append((env.concentration_map * 255.0).astype(np.uint8))
@@ -503,6 +507,192 @@ def simulate_episode(env: VolcanicAshEnv,
     if concentration_maps:
         result['concentration_maps'] = concentration_maps
     return result
+
+
+def evaluate_avoidance_demo_candidate(env: VolcanicAshEnv,
+                                      seed: int,
+                                      scene_counter: int = 0,
+                                      force_cloud_crossing_endpoints: bool = False) -> Dict:
+    if hasattr(env, 'random_scene_counter'):
+        env.random_scene_counter = int(scene_counter)
+    env.scene_cursor = -1
+    env.reset(seed=seed)
+
+    forced_pair = None
+    if force_cloud_crossing_endpoints:
+        forced_pair = choose_cloud_crossing_endpoints(env)
+        if forced_pair is not None:
+            env.initialize_flight(forced_pair[0], forced_pair[1], reference_path=None)
+
+    start = env.aircraft_pos.copy()
+    target = env.target_pos.copy()
+    direct_risk = env._segment_risk(start, target, num_samples=220)
+    direct_distance = float(np.linalg.norm(target - start))
+
+    path_points = np.asarray(env.reference_path, dtype=np.float32)
+    path_length = 0.0
+    path_max_risk = 0.0
+    path_mean_parts = []
+    if len(path_points) > 1:
+        segments = path_points[1:] - path_points[:-1]
+        lengths = np.linalg.norm(segments, axis=1)
+        path_length = float(np.sum(lengths))
+        for previous, current, segment_length in zip(path_points[:-1], path_points[1:], lengths):
+            samples = max(2, int(np.ceil(float(segment_length) / 6.0)))
+            risk = env._segment_risk(previous, current, num_samples=samples)
+            path_max_risk = max(path_max_risk, risk['max'])
+            path_mean_parts.append(risk['mean'])
+    path_mean_risk = float(np.mean(path_mean_parts)) if path_mean_parts else 0.0
+
+    detour_ratio = path_length / max(direct_distance, 1e-6)
+    direct_excess = max(0.0, direct_risk['max'] - env.safety_threshold * 0.85)
+    path_safety_margin = max(0.0, direct_risk['max'] - path_max_risk)
+    score = (
+        120.0 * direct_excess
+        + 80.0 * direct_risk['mean']
+        + 65.0 * min(max(detour_ratio - 1.0, 0.0), 1.8)
+        + 25.0 * path_safety_margin
+        + 0.015 * direct_distance
+    )
+    if direct_distance < min(env.width, env.height) * 0.45:
+        score -= 25.0
+
+    return {
+        'seed': int(seed),
+        'scene_counter': int(scene_counter),
+        'score': float(score),
+        'direct_max_risk': float(direct_risk['max']),
+        'direct_mean_risk': float(direct_risk['mean']),
+        'path_max_risk': float(path_max_risk),
+        'path_mean_risk': float(path_mean_risk),
+        'direct_distance': float(direct_distance),
+        'path_length': float(path_length),
+        'detour_ratio': float(detour_ratio),
+        'start_coordinate': [float(start[1]), float(start[0])],
+        'target_coordinate': [float(target[1]), float(target[0])],
+        'forced_start_target': (
+            [[float(start[0]), float(start[1])], [float(target[0]), float(target[1])]]
+            if forced_pair is not None else None
+        )
+    }
+
+
+def choose_cloud_crossing_endpoints(env: VolcanicAshEnv) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    if env.distance_to_cloud is None:
+        env._build_safe_airport_mask(margin=50)
+
+    cloud_mask = env.concentration_map >= env.safety_threshold * 0.55
+    if not np.any(cloud_mask):
+        cloud_mask = env.concentration_map >= max(0.08, env.safety_threshold * 0.25)
+    if not np.any(cloud_mask):
+        return None
+
+    cloud_points = np.argwhere(cloud_mask)
+    weights = env.concentration_map[cloud_mask].astype(np.float32)
+    if float(np.sum(weights)) <= 1e-6:
+        center = np.mean(cloud_points, axis=0)
+    else:
+        center = np.average(cloud_points, axis=0, weights=weights)
+    center = center.astype(np.float32)
+
+    safe_limit = env.safety_threshold * env.airport_safety_threshold_ratio
+    clearance = min(
+        float(env.departure_cloud_clearance_radius),
+        float(env.arrival_cloud_clearance_radius)
+    )
+    safe_mask = (
+        (env.concentration_map < safe_limit)
+        & (env.distance_to_cloud >= clearance)
+    )
+    margin = max(50, int(min(env.height, env.width) * 0.06))
+    safe_mask[:margin, :] = False
+    safe_mask[env.height - margin:, :] = False
+    safe_mask[:, :margin] = False
+    safe_mask[:, env.width - margin:] = False
+    safe_points = np.argwhere(safe_mask).astype(np.float32)
+    if len(safe_points) < 2:
+        return None
+
+    best = None
+    angles = np.linspace(0.0, np.pi, 24, endpoint=False)
+    for angle in angles:
+        direction = np.array([np.sin(angle), np.cos(angle)], dtype=np.float32)
+        relative = safe_points - center[None, :]
+        projection = relative @ direction
+        perpendicular = np.abs(relative @ np.array([direction[1], -direction[0]], dtype=np.float32))
+        near_line = perpendicular <= max(env.width, env.height) * 0.32
+        if np.count_nonzero(near_line) < 2:
+            continue
+
+        near_points = safe_points[near_line]
+        near_projection = projection[near_line]
+        start = near_points[int(np.argmin(near_projection))]
+        target = near_points[int(np.argmax(near_projection))]
+        direct_distance = float(np.linalg.norm(target - start))
+        if direct_distance < min(env.width, env.height) * 0.55:
+            continue
+
+        direct_risk = env._segment_risk(start, target, num_samples=260)
+        if direct_risk['max'] < env.safety_threshold * 0.85:
+            continue
+
+        path = env._build_reference_path(start, target)
+        path_points = np.asarray(path, dtype=np.float32)
+        path_length = direct_distance
+        if len(path_points) > 1:
+            path_length = float(np.linalg.norm(np.diff(path_points, axis=0), axis=1).sum())
+        detour_ratio = path_length / max(direct_distance, 1e-6)
+        score = (
+            120.0 * direct_risk['max']
+            + 160.0 * direct_risk['mean']
+            + 80.0 * max(0.0, detour_ratio - 1.0)
+            + 0.01 * direct_distance
+        )
+        if best is None or score > best[0]:
+            best = (score, start.astype(np.float32), target.astype(np.float32))
+
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def select_avoidance_demo_candidate(env: VolcanicAshEnv,
+                                    seed: int,
+                                    candidate_count: int,
+                                    vary_scene_per_checkpoint: bool,
+                                    min_direct_max_risk: float,
+                                    min_direct_mean_risk: float,
+                                    force_cloud_crossing_endpoints: bool) -> Dict:
+    candidates = []
+    original_scene_counter = getattr(env, 'random_scene_counter', 0)
+    original_scene_cursor = getattr(env, 'scene_cursor', -1)
+
+    try:
+        has_random_scene_generator = getattr(env, 'random_scene_generator', None) is not None
+        for index in range(max(1, int(candidate_count))):
+            scene_counter = index if (has_random_scene_generator or vary_scene_per_checkpoint) else 0
+            candidate = evaluate_avoidance_demo_candidate(
+                env,
+                seed=seed + index,
+                scene_counter=scene_counter,
+                force_cloud_crossing_endpoints=force_cloud_crossing_endpoints
+            )
+            candidates.append(candidate)
+    finally:
+        if hasattr(env, 'random_scene_counter'):
+            env.random_scene_counter = original_scene_counter
+        env.scene_cursor = original_scene_cursor
+
+    qualifying = [
+        item for item in candidates
+        if item['direct_max_risk'] >= min_direct_max_risk
+        and item['direct_mean_risk'] >= min_direct_mean_risk
+    ]
+    pool = qualifying if qualifying else candidates
+    best = max(pool, key=lambda item: item['score'])
+    best['candidate_count'] = len(candidates)
+    best['qualified_candidate_count'] = len(qualifying)
+    return best
 
 
 def latest_model_path(model_dir: str) -> Optional[str]:
@@ -999,7 +1189,12 @@ def export_checkpoint_animations(model_dir: str,
                                  ash_local_flow_smoothness: Optional[float] = None,
                                  ash_local_flow_update_interval: Optional[int] = None,
                                  ash_shear_strength: Optional[float] = None,
-                                 vary_scene_per_checkpoint: bool = False) -> List[Dict]:
+                                 vary_scene_per_checkpoint: bool = False,
+                                 avoidance_demo_scene: bool = False,
+                                 avoidance_candidate_count: int = 80,
+                                 min_demo_direct_max_risk: float = 0.25,
+                                 min_demo_direct_mean_risk: float = 0.04,
+                                 force_avoidance_endpoints: bool = False) -> List[Dict]:
     config = VolcanicAshConfig.load(config_path)
     if image_size is not None:
         resize_config_canvas(config, image_size)
@@ -1051,6 +1246,20 @@ def export_checkpoint_animations(model_dir: str,
     if hasattr(env, 'random_scene_counter'):
         env.random_scene_counter = 0
 
+    selected_demo = None
+    rollout_base_seed = seed
+    if avoidance_demo_scene:
+        selected_demo = select_avoidance_demo_candidate(
+            env=env,
+            seed=seed,
+            candidate_count=avoidance_candidate_count,
+            vary_scene_per_checkpoint=vary_scene_per_checkpoint,
+            min_direct_max_risk=min_demo_direct_max_risk,
+            min_direct_mean_risk=min_demo_direct_mean_risk,
+            force_cloud_crossing_endpoints=force_avoidance_endpoints
+        )
+        rollout_base_seed = int(selected_demo['seed'])
+
     milestones = []
     if include_untrained:
         milestones.append(('ep0000_untrained', None))
@@ -1077,20 +1286,26 @@ def export_checkpoint_animations(model_dir: str,
 
         env.scene_cursor = -1
         if hasattr(env, 'random_scene_counter'):
-            if vary_scene_per_checkpoint:
+            if selected_demo is not None and not vary_scene_per_checkpoint:
+                env.random_scene_counter = int(selected_demo.get('scene_counter', 0))
+            elif vary_scene_per_checkpoint:
                 env.random_scene_counter = checkpoint_episode(model_path) if model_path else 0
             else:
                 env.random_scene_counter = 0
-        rollout_seed = seed
+        rollout_seed = rollout_base_seed
         if vary_scene_per_checkpoint:
-            rollout_seed = seed + (checkpoint_episode(model_path) if model_path else 0)
+            rollout_seed = rollout_base_seed + (checkpoint_episode(model_path) if model_path else 0)
         path_result = simulate_episode(
             env=env,
             agent=agent,
             seed=rollout_seed,
             max_steps=max_steps,
             scene_label=scene_name,
-            milestone_label=label
+            milestone_label=label,
+            forced_start_target=(
+                selected_demo.get('forced_start_target')
+                if selected_demo is not None else None
+            )
         )
         exporter = ValidationAnimationExporter(env.config, env.concentration_map)
         milestone_dir = os.path.join(output_dir, 'animations', safe_name(scene_name), label)
@@ -1112,6 +1327,7 @@ def export_checkpoint_animations(model_dir: str,
                 'total_reward': path_result['total_reward'],
                 'max_concentration': path_result['max_concentration'],
                 'final_distance': path_result['validation_info']['distance_to_target'],
+                'avoidance_demo_candidate': selected_demo,
                 **export_info
             })
         except Exception as exc:
@@ -1142,6 +1358,16 @@ def main():
                         help='Base seed for deterministic random demo scenes.')
     parser.add_argument('--vary-scene-per-checkpoint', action='store_true',
                         help='Use a different random preview scene for each checkpoint animation.')
+    parser.add_argument('--avoidance-demo-scene', action='store_true',
+                        help='Select a demo seed where the direct route intersects ash, so avoidance is visible.')
+    parser.add_argument('--avoidance-candidate-count', type=int, default=80,
+                        help='Number of preview seeds scanned when --avoidance-demo-scene is enabled.')
+    parser.add_argument('--min-demo-direct-max-risk', type=float, default=0.25,
+                        help='Preferred minimum max ash concentration on the straight start-target line.')
+    parser.add_argument('--min-demo-direct-mean-risk', type=float, default=0.04,
+                        help='Preferred minimum mean ash concentration on the straight start-target line.')
+    parser.add_argument('--force-avoidance-endpoints', action='store_true',
+                        help='For demo animations, place safe start/target points on opposite sides of the ash cloud.')
     parser.add_argument('--dynamic-ash', action='store_true',
                         help='Render moving ash clouds in checkpoint animations.')
     parser.add_argument('--ash-advection-speed', type=float, default=None,
@@ -1255,7 +1481,12 @@ def main():
                 ash_local_flow_smoothness=args.ash_local_flow_smoothness,
                 ash_local_flow_update_interval=args.ash_local_flow_update_interval,
                 ash_shear_strength=args.ash_shear_strength,
-                vary_scene_per_checkpoint=args.vary_scene_per_checkpoint
+                vary_scene_per_checkpoint=args.vary_scene_per_checkpoint,
+                avoidance_demo_scene=args.avoidance_demo_scene,
+                avoidance_candidate_count=args.avoidance_candidate_count,
+                min_demo_direct_max_risk=args.min_demo_direct_max_risk,
+                min_demo_direct_mean_risk=args.min_demo_direct_mean_risk,
+                force_avoidance_endpoints=args.force_avoidance_endpoints
             ))
 
     if args.stitch_progress_gif and summary['animations']:
