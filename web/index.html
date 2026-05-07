@@ -2135,6 +2135,10 @@ async function loadValidationDefaults() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    if (window.location.protocol === 'file:') {
+        alert('请先运行 server.py，然后在浏览器打开 http://127.0.0.1:5050。直接打开 web/index.html 只是静态文件，无法使用导入、生成和规划接口。');
+        setValidationStatus('当前是静态文件模式。请运行 server.py 后访问 http://127.0.0.1:5050。', 'error');
+    }
     initCesium();
     applySuggestedRoute();
     loadValidationDefaults();

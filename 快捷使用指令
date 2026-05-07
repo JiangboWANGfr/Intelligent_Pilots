@@ -10,5 +10,6 @@ python train_model.py
 python test_planning.py
 # - 生成 output/planned_path.json
 #步骤4:Web可视化
-python server.py
-#浏览器打开 http://localhost:5000
+PORT=5050 MPLCONFIGDIR=output/mpl_cache .venv/bin/python server.py
+#浏览器打开 http://127.0.0.1:5050
+#不要直接打开 web/index.html；直接打开只是静态页面，导入/生成/规划接口无法正常工作。
