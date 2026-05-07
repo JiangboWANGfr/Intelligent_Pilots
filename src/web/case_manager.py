@@ -63,6 +63,8 @@ class WebCaseManager:
             scene_dir,
             prefix='concentration'
         )
+        overlay_path = os.path.join(scene_dir, 'concentration_overlay.png')
+        self.save_overlay_png(converted['concentration_map'], overlay_path)
         config_path = os.path.join(scene_dir, 'scene_config.json')
         converted['config'].save(config_path)
 
@@ -76,6 +78,7 @@ class WebCaseManager:
             concentration_map=outputs['npy_path'],
             concentration_png=outputs['grayscale_path'],
             preview_image=outputs['preview_path'],
+            overlay_image=overlay_path,
             config_path=config_path,
             extra={
                 'conversion_mode': conversion_mode,
@@ -97,6 +100,8 @@ class WebCaseManager:
         converter = AshImageConverter(config)
         map_array = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
         outputs = converter.save_standard_outputs(map_array, scene_dir, prefix='concentration')
+        overlay_path = os.path.join(scene_dir, 'concentration_overlay.png')
+        self.save_overlay_png(map_array, overlay_path)
         config_path = os.path.join(scene_dir, 'scene_config.json')
         config.save(config_path)
         manifest = self._build_scene_manifest(
@@ -109,6 +114,7 @@ class WebCaseManager:
             concentration_map=outputs['npy_path'],
             concentration_png=outputs['grayscale_path'],
             preview_image=outputs['preview_path'],
+            overlay_image=overlay_path,
             config_path=config_path,
             extra=extra or {}
         )
@@ -125,6 +131,7 @@ class WebCaseManager:
                               concentration_map: str,
                               concentration_png: str,
                               preview_image: str,
+                              overlay_image: str,
                               config_path: str,
                               extra: Dict) -> Dict:
         return {
@@ -134,14 +141,81 @@ class WebCaseManager:
             'created_at': datetime.now().isoformat(timespec='seconds'),
             'config': config.to_dict(),
             'summary': summary,
+            'cloud_info': self.build_cloud_info_from_map(np.load(concentration_map), config),
             'files': {
                 'source_image': source_image,
                 'concentration_map': concentration_map,
                 'concentration_png': concentration_png,
                 'preview_image': preview_image,
+                'overlay_image': overlay_image,
                 'config': config_path
             },
             'extra': extra
+        }
+
+    @staticmethod
+    def save_overlay_png(concentration_map: np.ndarray, output_path: str) -> str:
+        map_array = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
+        rgba = np.zeros((*map_array.shape, 4), dtype=np.uint8)
+
+        safe = (map_array > 0.02) & (map_array < 0.20)
+        low = (map_array >= 0.20) & (map_array < 0.50)
+        medium = (map_array >= 0.50) & (map_array < 0.80)
+        high = map_array >= 0.80
+
+        rgba[safe] = [0, 255, 0, 78]
+        rgba[low] = [255, 255, 0, 120]
+        rgba[medium] = [255, 165, 0, 155]
+        rgba[high] = [255, 0, 0, 190]
+        rgba[:, :, 3] = np.maximum(rgba[:, :, 3], np.clip(map_array * 165, 0, 190).astype(np.uint8))
+
+        bgra = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA)
+        cv2.imwrite(output_path, bgra)
+        return output_path
+
+    @staticmethod
+    def build_cloud_info_from_map(concentration_map: np.ndarray,
+                                  config: VolcanicAshConfig) -> Dict:
+        map_array = np.asarray(concentration_map, dtype=np.float32)
+        weights = np.clip(map_array, 0.0, 1.0)
+        height, width = map_array.shape[:2]
+
+        if float(np.sum(weights)) <= 1e-6:
+            center_y = (height - 1) / 2.0
+            center_x = (width - 1) / 2.0
+        else:
+            ys, xs = np.indices((height, width))
+            total_weight = float(np.sum(weights))
+            center_y = float(np.sum(ys * weights) / total_weight)
+            center_x = float(np.sum(xs * weights) / total_weight)
+
+        center_lon = config.geo_center_lon + (center_x / max(width, 1) - 0.5) * config.geo_span_lon
+        center_lat = config.geo_center_lat + (0.5 - center_y / max(height, 1)) * config.geo_span_lat
+        pixel_degree = ((config.geo_span_lat / max(height, 1)) +
+                        (config.geo_span_lon / max(width, 1))) / 2.0
+        thresholds = {
+            'high': min(0.95, config.concentration_threshold * 1.5),
+            'medium': config.concentration_threshold,
+            'low': max(0.05, config.concentration_threshold * 0.5),
+            'safe': max(0.02, config.concentration_threshold * 0.2)
+        }
+        radii = {}
+        previous_radius = 0.0
+        for level in ['high', 'medium', 'low', 'safe']:
+            area = float(np.sum(map_array >= thresholds[level]))
+            radius = float(np.sqrt(area / np.pi) * pixel_degree) if area > 0 else previous_radius
+            radii[level] = round(max(radius, previous_radius), 4)
+            previous_radius = radii[level]
+
+        return {
+            'center_lat': float(center_lat),
+            'center_lon': float(center_lon),
+            'zone_radii': {
+                'high': radii['high'],
+                'medium': radii['medium'],
+                'low': radii['low'],
+                'safe': radii['safe']
+            }
         }
 
     def load_scene(self, scene_id: str) -> Dict:

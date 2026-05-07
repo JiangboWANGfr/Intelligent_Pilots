@@ -238,10 +238,10 @@
                     </select>
                 </div>
                 <div class="mode-row">
-                    <button class="btn" onclick="setValidationPickMode('start')">点击设置起点</button>
-                    <button class="btn" onclick="setValidationPickMode('target')">点击设置终点</button>
+                    <button class="btn" onclick="setValidationPickMode('start')">地球上设置起点</button>
+                    <button class="btn" onclick="setValidationPickMode('target')">地球上设置终点</button>
                 </div>
-                <div id="validationPixelStatus" class="pixel-status">转换后可在标准图上点击设置起点和终点。</div>
+                <div id="validationPixelStatus" class="pixel-status">导入或生成火山灰场景后，可在地球或标准图上点击设置起点和终点。</div>
                 <img id="validationConvertedPreview" class="media-preview map-click-preview" alt="标准火山灰浓度图" onclick="handleConvertedMapClick(event)">
                 <div class="form-grid" style="margin-top:10px;">
                     <div class="field-group">
@@ -262,7 +262,7 @@
                     </div>
                     <div class="field-group">
                         <label for="validationDynamicAsh">动态火山灰</label>
-                        <select id="validationDynamicAsh" class="input-control">
+                        <select id="validationDynamicAsh" class="input-control" onchange="renderCurrentSceneOnGlobe()">
                             <option value="false" selected>关闭</option>
                             <option value="true">开启</option>
                         </select>
@@ -317,8 +317,9 @@
                     </div>
                 </div>
                 <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
-                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runPlanningCase()">完成规划并保存结果</button>
-                <div id="validationStatus" class="status-note">上传现实图后，可直接生成验证动画并自动加载到地图。</div>
+                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runPlanningCase()">规划/测试并播放</button>
+                <button id="saveCaseBtn" class="btn btn-full" onclick="saveLatestCase()" disabled>保存当前结果</button>
+                <div id="validationStatus" class="status-note">导入或生成火山灰场景后，会先加载到地球上。</div>
                 <div id="validationResultCard" class="result-card">
                     <div class="info-row"><span class="label">案例 ID:</span><span id="validationCaseId">--</span></div>
                     <div class="info-row"><span class="label">规划方式:</span><span id="validationMethod">--</span></div>
@@ -445,6 +446,8 @@ let currentScene = null;
 let currentSceneId = null;
 let savedScenes = [];
 let savedCases = [];
+let globePickHandler = null;
+let latestPlanningCase = null;
 
 // ===== 动态云状态 =====
 let cloudAnimStartTime = null;      // 云动画开始时间（ms）
@@ -622,6 +625,9 @@ function initCesium() {
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
         duration: 2
     });
+
+    globePickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    globePickHandler.setInputAction(handleGlobeClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 }
 
 function handleFileSelect(event) {
@@ -725,6 +731,7 @@ function updateValidationPixelStatus() {
 function setValidationPickMode(mode) {
     validationPickMode = mode === 'target' ? 'target' : 'start';
     updateValidationPixelStatus();
+    setValidationStatus(`当前可在地球或标准图上点击设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
 }
 
 function pixelToGeo(pixel) {
@@ -740,6 +747,35 @@ function pixelToGeo(pixel) {
     };
 }
 
+function geoToPixel(lat, lon) {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
+    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
+    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 2.0)));
+    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 2.0)));
+    const height = Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768)));
+    const width = Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)));
+    const x = Math.round(((lon - centerLon) / spanLon + 0.5) * width);
+    const y = Math.round((0.5 - (lat - centerLat) / spanLat) * height);
+    return {
+        x: Math.max(0, Math.min(width - 1, x)),
+        y: Math.max(0, Math.min(height - 1, y))
+    };
+}
+
+function setFlightPixelPoint(pixel, sourceLabel) {
+    if (validationPickMode === 'start') {
+        validationStartPixel = pixel;
+        validationPickMode = 'target';
+    } else {
+        validationTargetPixel = pixel;
+        validationPickMode = 'start';
+    }
+    applyPixelToGeoInputs();
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    setValidationStatus(`${sourceLabel || '点击'}已设置，当前等待设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
+}
+
 function applyPixelToGeoInputs() {
     if (validationStartPixel) {
         const geo = pixelToGeo(validationStartPixel);
@@ -751,6 +787,79 @@ function applyPixelToGeoInputs() {
         document.getElementById('validationTargetLat').value = geo.lat.toFixed(4);
         document.getElementById('validationTargetLon').value = geo.lon.toFixed(4);
     }
+}
+
+function getValidationPointGeo(kind) {
+    const latId = kind === 'start' ? 'validationStartLat' : 'validationTargetLat';
+    const lonId = kind === 'start' ? 'validationStartLon' : 'validationTargetLon';
+    return {
+        lat: getNumericInputValue(latId, kind === 'start' ? 34.3 : 35.7),
+        lon: getNumericInputValue(lonId, kind === 'start' ? 119.3 : 120.7)
+    };
+}
+
+function clearRouteSelectionOnGlobe() {
+    if (originalRouteEntity && viewer.entities.contains(originalRouteEntity)) {
+        viewer.entities.remove(originalRouteEntity);
+    }
+    originalRouteEntity = null;
+    routeMarkerEntities.forEach(entity => {
+        if (viewer.entities.contains(entity)) viewer.entities.remove(entity);
+    });
+    routeMarkerEntities = [];
+}
+
+function addRoutePointMarker(kind, lon, lat) {
+    const isStart = kind === 'start';
+    routeMarkerEntities.push(viewer.entities.add({
+        name: isStart ? 'Start' : 'Target',
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 10000),
+        point: {
+            pixelSize: isStart ? 15 : 18,
+            color: isStart ? Cesium.Color.LIME : Cesium.Color.RED,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2
+        },
+        label: {
+            text: isStart ? '起点' : '终点',
+            font: 'bold 14px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, isStart ? -20 : -25)
+        }
+    }));
+}
+
+function updateRouteSelectionOnGlobe() {
+    if (!viewer) return;
+    clearRouteSelectionOnGlobe();
+    const hasStart = Boolean(validationStartPixel);
+    const hasTarget = Boolean(validationTargetPixel);
+    if (!hasStart && !hasTarget) return;
+
+    const start = hasStart ? getValidationPointGeo('start') : null;
+    const target = hasTarget ? getValidationPointGeo('target') : null;
+    if (hasStart && hasTarget) {
+        renderOriginalRoute([start.lon, start.lat], [target.lon, target.lat]);
+        return;
+    }
+    if (hasStart) addRoutePointMarker('start', start.lon, start.lat);
+    if (hasTarget) addRoutePointMarker('target', target.lon, target.lat);
+}
+
+function handleGlobeClick(click) {
+    if (!currentScene || !validationConvertedMap) {
+        return;
+    }
+    const cartesian = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+    if (!cartesian) return;
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+    const lat = Cesium.Math.toDegrees(cartographic.latitude);
+    const lon = Cesium.Math.toDegrees(cartographic.longitude);
+    const pixel = geoToPixel(lat, lon);
+    setFlightPixelPoint(pixel, '地球点击');
 }
 
 function handleConvertedMapClick(event) {
@@ -766,15 +875,7 @@ function handleConvertedMapClick(event) {
         x: Math.max(0, Math.min(validationConvertedMap.width - 1, x)),
         y: Math.max(0, Math.min(validationConvertedMap.height - 1, y))
     };
-    if (validationPickMode === 'start') {
-        validationStartPixel = pixel;
-        validationPickMode = 'target';
-    } else {
-        validationTargetPixel = pixel;
-        validationPickMode = 'start';
-    }
-    applyPixelToGeoInputs();
-    updateValidationPixelStatus();
+    setFlightPixelPoint(pixel, '标准图点击');
 }
 
 async function convertValidationImage() {
@@ -806,7 +907,7 @@ async function convertValidationImage() {
         }
         setCurrentScene(result.scene);
         await refreshScenes();
-        setValidationStatus('火山灰场景已导入。可在标准图上点击设置起点和终点。', 'success');
+        setValidationStatus('火山灰场景已导入并加载到地球。可在地球上点击设置起点和终点。', 'success');
     } catch (error) {
         console.error('Image conversion failed:', error);
         setValidationStatus(`导入失败：${error.message}`, 'error');
@@ -839,6 +940,7 @@ function setCurrentScene(scene) {
     if (Number.isFinite(Number(config.geo_center_lon))) document.getElementById('validationCenterLon').value = Number(config.geo_center_lon).toFixed(4);
     if (Number.isFinite(Number(config.geo_span_lat))) document.getElementById('validationSpanLat').value = Number(config.geo_span_lat).toFixed(2);
     if (Number.isFinite(Number(config.geo_span_lon))) document.getElementById('validationSpanLon').value = Number(config.geo_span_lon).toFixed(2);
+    if (scene.scene_name) document.getElementById('validationSceneName').value = scene.scene_name;
     const previewUrl = scene.file_urls && scene.file_urls.preview_image;
     const preview = document.getElementById('validationConvertedPreview');
     if (previewUrl) {
@@ -848,6 +950,7 @@ function setCurrentScene(scene) {
     const sceneSelect = document.getElementById('sceneSelect');
     if (sceneSelect) sceneSelect.value = currentSceneId || '';
     updateValidationPixelStatus();
+    renderCurrentSceneOnGlobe();
 }
 
 async function refreshScenes() {
@@ -882,7 +985,7 @@ async function loadSelectedScene() {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || '场景加载失败');
         setCurrentScene(result.scene);
-        setValidationStatus('已载入保存的火山灰场景。', 'success');
+        setValidationStatus('已载入保存的火山灰场景，并加载到地球。', 'success');
     } catch (error) {
         setValidationStatus(`场景加载失败：${error.message}`, 'error');
     }
@@ -909,7 +1012,7 @@ async function generateRandomScene() {
         if (!response.ok || !result.success) throw new Error(result.error || '生成失败');
         setCurrentScene(result.scene);
         await refreshScenes();
-        setValidationStatus('随机火山灰场景已生成。可设置起点终点后规划。', 'success');
+        setValidationStatus('随机火山灰场景已生成并加载到地球。可设置起点终点后规划。', 'success');
     } catch (error) {
         setValidationStatus(`生成失败：${error.message}`, 'error');
     } finally {
@@ -928,6 +1031,16 @@ function applySuggestedRoute() {
     document.getElementById('validationStartLon').value = (centerLon - spanLon * 0.35).toFixed(4);
     document.getElementById('validationTargetLat').value = (centerLat + spanLat * 0.35).toFixed(4);
     document.getElementById('validationTargetLon').value = (centerLon + spanLon * 0.35).toFixed(4);
+    validationStartPixel = geoToPixel(
+        getNumericInputValue('validationStartLat', centerLat - spanLat * 0.35),
+        getNumericInputValue('validationStartLon', centerLon - spanLon * 0.35)
+    );
+    validationTargetPixel = geoToPixel(
+        getNumericInputValue('validationTargetLat', centerLat + spanLat * 0.35),
+        getNumericInputValue('validationTargetLon', centerLon + spanLon * 0.35)
+    );
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
 }
 
 function buildValidationConfigPayload() {
@@ -942,6 +1055,98 @@ function buildValidationConfigPayload() {
     ];
     payload.concentration_threshold = getNumericInputValue('validationFallbackLimit', 0.3);
     return payload;
+}
+
+function clearCloudLayerOnly() {
+    cloudEntities.forEach(entity => {
+        if (viewer.entities.contains(entity)) viewer.entities.remove(entity);
+    });
+    cloudEntities = [];
+    cloudAnimStartTime = null;
+    cloudBaseCoords = {};
+}
+
+function getSceneCloudInfo(scene) {
+    const config = scene.config || {};
+    if (scene.cloud_info && scene.cloud_info.center_lat !== undefined) {
+        return scene.cloud_info;
+    }
+
+    const summary = scene.summary || {};
+    const activeRatio = Number(summary.active_area_ratio || summary.danger_area_ratio || 0.08);
+    const spanLat = Number(config.geo_span_lat || 2.0);
+    const spanLon = Number(config.geo_span_lon || 2.0);
+    const approxRadius = Math.max(0.08, Math.sqrt(Math.max(activeRatio, 0.02) * spanLat * spanLon / Math.PI));
+    return {
+        center_lat: Number(config.geo_center_lat || 35.0),
+        center_lon: Number(config.geo_center_lon || 120.0),
+        zone_radii: {
+            safe: approxRadius * 1.15,
+            low: approxRadius * 0.85,
+            medium: approxRadius * 0.58,
+            high: approxRadius * 0.35
+        }
+    };
+}
+
+function renderSceneFootprint(scene) {
+    const config = scene.config || {};
+    const fileUrls = scene.file_urls || {};
+    const overlayUrl = fileUrls.overlay_image || null;
+    const centerLat = Number(config.geo_center_lat || currentCenterLat);
+    const centerLon = Number(config.geo_center_lon || currentCenterLon);
+    const spanLat = Number(config.geo_span_lat || 2.0);
+    const spanLon = Number(config.geo_span_lon || 2.0);
+    const west = centerLon - spanLon / 2;
+    const east = centerLon + spanLon / 2;
+    const south = centerLat - spanLat / 2;
+    const north = centerLat + spanLat / 2;
+    const material = overlayUrl
+        ? new Cesium.ImageMaterialProperty({
+            image: withCacheBust(overlayUrl),
+            transparent: true,
+            color: Cesium.Color.WHITE.withAlpha(0.88)
+        })
+        : Cesium.Color.CYAN.withAlpha(0.04);
+    cloudEntities.push(viewer.entities.add({
+        name: 'Scene Ash Overlay',
+        rectangle: {
+            coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
+            height: 9000,
+            material,
+            outline: true,
+            outlineColor: Cesium.Color.CYAN.withAlpha(0.75)
+        }
+    }));
+}
+
+function renderCurrentSceneOnGlobe() {
+    if (!viewer || !currentScene) return;
+    clearCloudLayerOnly();
+    const cloudInfo = getSceneCloudInfo(currentScene);
+    currentCenterLat = Number(cloudInfo.center_lat || 35.0);
+    currentCenterLon = Number(cloudInfo.center_lon || 120.0);
+    const zr = cloudInfo.zone_radii || {};
+    const zoneRadii = {
+        safe: Number(zr.safe || 0.58),
+        low: Number(zr.low || 0.46),
+        medium: Number(zr.medium || 0.37),
+        high: Number(zr.high || 0.30)
+    };
+    const dynamicEnabled = document.getElementById('validationDynamicAsh').value === 'true';
+    createDynamicCloudLayers(
+        currentCenterLon,
+        currentCenterLat,
+        zoneRadii,
+        73,
+        0.55,
+        dynamicEnabled ? 0.004 : 0.0,
+        dynamicEnabled ? 0.00002 : 0.0,
+        80
+    );
+    renderSceneFootprint(currentScene);
+    updateRouteSelectionOnGlobe();
+    setTimeout(() => zoomToCloud(), 250);
 }
 
 function updateValidationResultPanel(result) {
@@ -979,16 +1184,28 @@ async function runPlanningCase() {
         setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
         return;
     }
+    validationStartPixel = geoToPixel(
+        getNumericInputValue('validationStartLat', 34.3),
+        getNumericInputValue('validationStartLon', 119.3)
+    );
+    validationTargetPixel = geoToPixel(
+        getNumericInputValue('validationTargetLat', 35.7),
+        getNumericInputValue('validationTargetLon', 120.7)
+    );
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
     if (!validationStartPixel || !validationTargetPixel) {
-        setValidationStatus('请先在标准图上点击设置起点和终点。', 'error');
+        setValidationStatus('请先在地球或标准图上点击设置起点和终点。', 'error');
         return;
     }
 
     const runButton = document.getElementById('runValidationBtn');
+    const saveButton = document.getElementById('saveCaseBtn');
     const originalText = runButton.textContent;
     runButton.disabled = true;
+    saveButton.disabled = true;
     runButton.textContent = '规划中...';
-    setValidationStatus('正在规划航线并保存案例...', 'busy');
+    setValidationStatus('正在规划航线并生成飞行动画...', 'busy');
 
     try {
         const payload = buildValidationConfigPayload();
@@ -1015,15 +1232,18 @@ async function runPlanningCase() {
         }
 
         updateValidationResultPanel(result);
+        latestPlanningCase = result.case || null;
         if (result.path_data) {
             processData({
                 path_data: result.path_data,
                 cloud_info: result.path_data.cloud_info || null,
                 validation_info: result.path_data.validation_info || null
             });
+            setTimeout(() => playSimulation(), 900);
         }
         await refreshCases();
-        setValidationStatus(result.message || '规划完成，结果已保存。', 'success');
+        saveButton.disabled = !latestPlanningCase;
+        setValidationStatus(result.message || '规划完成，飞机已开始播放，结果可保存和载入。', 'success');
     } catch (error) {
         console.error('Planning case failed:', error);
         setValidationStatus(`规划失败：${error.message}`, 'error');
@@ -1031,6 +1251,19 @@ async function runPlanningCase() {
         runButton.disabled = false;
         runButton.textContent = originalText;
     }
+}
+
+async function saveLatestCase() {
+    if (!latestPlanningCase) {
+        setValidationStatus('当前还没有可保存的规划结果。', 'error');
+        return;
+    }
+    await refreshCases();
+    const select = document.getElementById('caseSelect');
+    if (select && latestPlanningCase.case_id) {
+        select.value = latestPlanningCase.case_id;
+    }
+    setValidationStatus(`当前结果已保存：${latestPlanningCase.case_id}`, 'success');
 }
 
 async function refreshCases() {
@@ -1108,6 +1341,9 @@ async function loadSelectedCase() {
             output_file_url: item.output_urls && item.output_urls.planned_path,
             plot_file_url: item.output_urls && item.output_urls.path_plot
         });
+        latestPlanningCase = item;
+        const saveButton = document.getElementById('saveCaseBtn');
+        if (saveButton) saveButton.disabled = false;
         if (item.path_data) {
             processData({
                 path_data: item.path_data,

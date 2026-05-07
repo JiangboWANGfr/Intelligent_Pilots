@@ -2,6 +2,7 @@ from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
 import os
+os.environ.setdefault('MPLBACKEND', 'Agg')
 import json
 import numpy as np
 from urllib.parse import quote
