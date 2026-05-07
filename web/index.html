@@ -263,7 +263,7 @@
                     </div>
                     <div class="field-group">
                         <label for="validationDynamicAsh">动态火山灰</label>
-                        <select id="validationDynamicAsh" class="input-control" onchange="renderCurrentSceneOnGlobe()">
+                        <select id="validationDynamicAsh" class="input-control" onchange="renderCurrentSceneOnGlobe({flyTo:false})">
                             <option value="false" selected>关闭</option>
                             <option value="true">开启</option>
                         </select>
@@ -903,13 +903,7 @@ function handleGlobeClick(click) {
             currentScene.config = currentScene.config || {};
             currentScene.config.geo_center_lat = lat;
             currentScene.config.geo_center_lon = lon;
-            renderCurrentSceneOnGlobe();
-        } else {
-            viewer.camera.flyTo({
-                destination: Cesium.Cartesian3.fromDegrees(lon, lat, 900000),
-                orientation: { heading: 0, pitch: Cesium.Math.toRadians(-65), roll: 0 },
-                duration: 1.0
-            });
+            renderCurrentSceneOnGlobe({flyTo:false});
         }
         setValidationStatus('火山中心已设置。现在可以导入或生成火山灰图。', 'success');
         validationPickMode = 'start';
@@ -1007,7 +1001,7 @@ function setCurrentScene(scene) {
     const sceneSelect = document.getElementById('sceneSelect');
     if (sceneSelect) sceneSelect.value = currentSceneId || '';
     updateValidationPixelStatus();
-    renderCurrentSceneOnGlobe();
+    renderCurrentSceneOnGlobe({flyTo:true});
 }
 
 async function refreshScenes() {
@@ -1097,7 +1091,7 @@ function applySuggestedRoute() {
     );
     updateValidationPixelStatus();
     updateRouteSelectionOnGlobe();
-    if (currentScene) renderCurrentSceneOnGlobe();
+    if (currentScene) renderCurrentSceneOnGlobe({flyTo:false});
 }
 
 function buildValidationConfigPayload() {
@@ -1199,8 +1193,9 @@ function renderVolcanoCenterMarker(lon, lat) {
     }));
 }
 
-function renderCurrentSceneOnGlobe() {
+function renderCurrentSceneOnGlobe(options = {}) {
     if (!viewer || !currentScene) return;
+    const flyTo = options.flyTo === true;
     clearCloudLayerOnly();
     const cloudInfo = getSceneCloudInfo(currentScene);
     currentCenterLat = Number(cloudInfo.center_lat || 35.0);
@@ -1212,7 +1207,9 @@ function renderCurrentSceneOnGlobe() {
         Number(config.geo_center_lat || currentCenterLat)
     );
     updateRouteSelectionOnGlobe();
-    setTimeout(() => zoomToCloud(), 250);
+    if (flyTo) {
+        setTimeout(() => zoomToCloud(), 250);
+    }
 }
 
 function updateValidationResultPanel(result) {
