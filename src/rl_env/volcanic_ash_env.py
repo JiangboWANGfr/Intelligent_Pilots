@@ -999,6 +999,7 @@ class VolcanicAshEnv(gym.Env):
         self.scene_cursor = -1
         self.scene_map_cache = {}
         self._update_environment_shape()
+        self._refresh_runtime_parameters()
         self.concentration_map = np.array(self.external_concentration_map, copy=True)
 
     def initialize_flight(self,

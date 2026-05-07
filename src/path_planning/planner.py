@@ -201,12 +201,20 @@ class PathPlanner:
             'planning_method': 'rl',
             'scene_name': self.env.scene_name
         }
+        if bool(getattr(self.config, 'enable_dynamic_ash', False)):
+            path_data['concentration_maps'] = [
+                (self.env.concentration_map * 255.0).astype(np.uint8)
+            ]
         
         for step in range(max_steps):
             previous_pos = self.env.aircraft_pos.copy()
             action = self.agent.select_action(state, evaluate=True)
             
             next_state, reward, terminated, truncated, info = self.env.step(action)
+            if 'concentration_maps' in path_data:
+                path_data['concentration_maps'].append(
+                    (self.env.concentration_map * 255.0).astype(np.uint8)
+                )
             
             path_data['total_reward'] += reward
             path_data['total_fuel'] = info['fuel_consumed']

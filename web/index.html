@@ -229,7 +229,14 @@
                         <input id="validationImageWidth" class="input-control" type="number" step="1" value="768">
                     </div>
                 </div>
-                <button id="convertValidationImageBtn" class="btn btn-full" onclick="convertValidationImage()">转换并预览标准火山灰图</button>
+                <button id="convertValidationImageBtn" class="btn btn-full" onclick="convertValidationImage()">导入并保存为火山灰场景</button>
+                <button id="generateSceneBtn" class="btn btn-full" onclick="generateRandomScene()">随机生成火山灰场景</button>
+                <div class="field-group" style="margin-top:8px;">
+                    <label for="sceneSelect">已保存场景</label>
+                    <select id="sceneSelect" class="input-control" onchange="loadSelectedScene()">
+                        <option value="">暂无场景</option>
+                    </select>
+                </div>
                 <div class="mode-row">
                     <button class="btn" onclick="setValidationPickMode('start')">点击设置起点</button>
                     <button class="btn" onclick="setValidationPickMode('target')">点击设置终点</button>
@@ -244,6 +251,21 @@
                     <div class="field-group">
                         <label for="validationFallbackLimit">兜底浓度上限</label>
                         <input id="validationFallbackLimit" class="input-control" type="number" step="0.01" value="0.30">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationSafetyFactor">安全系数</label>
+                        <select id="validationSafetyFactor" class="input-control">
+                            <option value="0.6">低 0.6</option>
+                            <option value="1.0" selected>中 1.0</option>
+                            <option value="1.8">高 1.8</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="validationDynamicAsh">动态火山灰</label>
+                        <select id="validationDynamicAsh" class="input-control">
+                            <option value="false" selected>关闭</option>
+                            <option value="true">开启</option>
+                        </select>
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLat">中心纬度</label>
@@ -285,11 +307,20 @@
                         <label for="validationMaxFrames">最大帧数</label>
                         <input id="validationMaxFrames" class="input-control" type="number" step="1" value="180">
                     </div>
+                    <div class="field-group">
+                        <label for="validationMaxSteps">最大步数</label>
+                        <input id="validationMaxSteps" class="input-control" type="number" step="1" value="500">
+                    </div>
+                    <div class="field-group">
+                        <label for="validationModelPath">模型路径</label>
+                        <input id="validationModelPath" class="input-control" type="text" value="models/large_slow_dynamic_ash_turn_controller_v2/final_model.pth">
+                    </div>
                 </div>
                 <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
-                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runValidationFromImage()">生成验证动画</button>
+                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runPlanningCase()">完成规划并保存结果</button>
                 <div id="validationStatus" class="status-note">上传现实图后，可直接生成验证动画并自动加载到地图。</div>
                 <div id="validationResultCard" class="result-card">
+                    <div class="info-row"><span class="label">案例 ID:</span><span id="validationCaseId">--</span></div>
                     <div class="info-row"><span class="label">规划方式:</span><span id="validationMethod">--</span></div>
                     <div class="info-row"><span class="label">回退情况:</span><span id="validationFallback">--</span></div>
                     <div class="info-row"><span class="label">场景名称:</span><span id="validationScene">--</span></div>
@@ -300,6 +331,12 @@
                         <a id="validationPlotLink" href="#" target="_blank" rel="noopener" style="display:none">打开路径图</a>
                     </div>
                     <img id="validationGifPreview" class="media-preview" alt="验证 GIF 预览">
+                </div>
+                <div class="field-group" style="margin-top:10px;">
+                    <label for="caseSelect">历史规划结果</label>
+                    <select id="caseSelect" class="input-control" onchange="loadSelectedCase()">
+                        <option value="">暂无结果</option>
+                    </select>
                 </div>
             </div>
 
@@ -404,6 +441,10 @@ let validationConvertedMap = null;
 let validationPickMode = 'start';
 let validationStartPixel = null;
 let validationTargetPixel = null;
+let currentScene = null;
+let currentSceneId = null;
+let savedScenes = [];
+let savedCases = [];
 
 // ===== 动态云状态 =====
 let cloudAnimStartTime = null;      // 云动画开始时间（ms）
@@ -671,13 +712,14 @@ function updateValidationPixelStatus() {
     const mapText = validationConvertedMap
         ? `标准图: ${validationConvertedMap.width}×${validationConvertedMap.height}`
         : '标准图: 未转换';
+    const sceneText = currentSceneId ? `场景: ${currentSceneId}` : '场景: 未选择';
     const startText = validationStartPixel
         ? `起点: x=${validationStartPixel.x}, y=${validationStartPixel.y}`
         : '起点: 未设置';
     const targetText = validationTargetPixel
         ? `终点: x=${validationTargetPixel.x}, y=${validationTargetPixel.y}`
         : '终点: 未设置';
-    status.textContent = `${mapText} | ${startText} | ${targetText} | 当前点击: ${validationPickMode === 'start' ? '起点' : '终点'}`;
+    status.textContent = `${sceneText} | ${mapText} | ${startText} | ${targetText} | 当前点击: ${validationPickMode === 'start' ? '起点' : '终点'}`;
 }
 
 function setValidationPickMode(mode) {
@@ -757,24 +799,119 @@ async function convertValidationImage() {
         ]));
         formData.append('config', JSON.stringify(buildValidationConfigPayload()));
 
-        const response = await fetch('/api/convert-image', { method: 'POST', body: formData });
+        const response = await fetch('/api/scenes/import-image', { method: 'POST', body: formData });
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || result.message || '转换失败');
+            throw new Error(result.error || result.message || '导入失败');
         }
-        validationConvertedMap = {
-            width: result.summary.shape[1],
-            height: result.summary.shape[0],
-            result
-        };
-        const preview = document.getElementById('validationConvertedPreview');
-        preview.src = withCacheBust(result.output_urls.preview_path);
-        preview.style.display = 'block';
-        updateValidationPixelStatus();
-        setValidationStatus('标准火山灰图已生成。可在图上点击设置起点和终点。', 'success');
+        setCurrentScene(result.scene);
+        await refreshScenes();
+        setValidationStatus('火山灰场景已导入。可在标准图上点击设置起点和终点。', 'success');
     } catch (error) {
         console.error('Image conversion failed:', error);
-        setValidationStatus(`转换失败：${error.message}`, 'error');
+        setValidationStatus(`导入失败：${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function setCurrentScene(scene) {
+    currentScene = scene;
+    currentSceneId = scene ? scene.scene_id : null;
+    if (!scene) {
+        validationConvertedMap = null;
+        updateValidationPixelStatus();
+        return;
+    }
+    const shape = scene.summary && scene.summary.shape ? scene.summary.shape : [768, 768];
+    validationConvertedMap = {
+        width: Number(shape[1]) || 768,
+        height: Number(shape[0]) || 768,
+        result: scene
+    };
+    const config = scene.config || {};
+    if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
+        document.getElementById('validationImageHeight').value = Math.round(Number(config.image_size[0]) || validationConvertedMap.height);
+        document.getElementById('validationImageWidth').value = Math.round(Number(config.image_size[1]) || validationConvertedMap.width);
+    }
+    if (Number.isFinite(Number(config.geo_center_lat))) document.getElementById('validationCenterLat').value = Number(config.geo_center_lat).toFixed(4);
+    if (Number.isFinite(Number(config.geo_center_lon))) document.getElementById('validationCenterLon').value = Number(config.geo_center_lon).toFixed(4);
+    if (Number.isFinite(Number(config.geo_span_lat))) document.getElementById('validationSpanLat').value = Number(config.geo_span_lat).toFixed(2);
+    if (Number.isFinite(Number(config.geo_span_lon))) document.getElementById('validationSpanLon').value = Number(config.geo_span_lon).toFixed(2);
+    const previewUrl = scene.file_urls && scene.file_urls.preview_image;
+    const preview = document.getElementById('validationConvertedPreview');
+    if (previewUrl) {
+        preview.src = withCacheBust(previewUrl);
+        preview.style.display = 'block';
+    }
+    const sceneSelect = document.getElementById('sceneSelect');
+    if (sceneSelect) sceneSelect.value = currentSceneId || '';
+    updateValidationPixelStatus();
+}
+
+async function refreshScenes() {
+    try {
+        const response = await fetch('/api/scenes', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '场景列表加载失败');
+        savedScenes = result.scenes || [];
+        const select = document.getElementById('sceneSelect');
+        select.innerHTML = '';
+        if (savedScenes.length === 0) {
+            select.innerHTML = '<option value="">暂无场景</option>';
+            return;
+        }
+        savedScenes.forEach(scene => {
+            const option = document.createElement('option');
+            option.value = scene.scene_id;
+            option.textContent = `${scene.scene_name || scene.scene_id} | ${scene.created_at || ''}`;
+            select.appendChild(option);
+        });
+        if (currentSceneId) select.value = currentSceneId;
+    } catch (error) {
+        console.error('refreshScenes failed:', error);
+    }
+}
+
+async function loadSelectedScene() {
+    const sceneId = document.getElementById('sceneSelect').value;
+    if (!sceneId) return;
+    try {
+        const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '场景加载失败');
+        setCurrentScene(result.scene);
+        setValidationStatus('已载入保存的火山灰场景。', 'success');
+    } catch (error) {
+        setValidationStatus(`场景加载失败：${error.message}`, 'error');
+    }
+}
+
+async function generateRandomScene() {
+    const button = document.getElementById('generateSceneBtn');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '生成中...';
+    setValidationStatus('正在生成随机火山灰场景...', 'busy');
+    try {
+        const payload = buildValidationConfigPayload();
+        payload.scene_name = document.getElementById('validationSceneName').value.trim() || 'generated_ash_scene';
+        payload.random_ash_scene = true;
+        payload.random_centers_range = [1, 6];
+        payload.seed = Date.now() % 1000000000;
+        const response = await fetch('/api/scenes/generated', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '生成失败');
+        setCurrentScene(result.scene);
+        await refreshScenes();
+        setValidationStatus('随机火山灰场景已生成。可设置起点终点后规划。', 'success');
+    } catch (error) {
+        setValidationStatus(`生成失败：${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = originalText;
@@ -815,6 +952,7 @@ function updateValidationResultPanel(result) {
     const validationInfo = pathData.validation_info || {};
     const animationExport = result.animation_export || validationInfo.animation_export || {};
 
+    document.getElementById('validationCaseId').textContent = (result.case && result.case.case_id) || validationInfo.case_id || '--';
     document.getElementById('validationMethod').textContent = pathData.planning_method || '--';
     document.getElementById('validationFallback').textContent = validationInfo.used_fallback ? `已启用 (${validationInfo.fallback_reason || 'fallback'})` : '未启用';
     document.getElementById('validationScene').textContent = pathData.scene_name || validationInfo.scene_name || '--';
@@ -834,6 +972,153 @@ function updateValidationResultPanel(result) {
     }
 
     card.style.display = 'block';
+}
+
+async function runPlanningCase() {
+    if (!currentSceneId) {
+        setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
+        return;
+    }
+    if (!validationStartPixel || !validationTargetPixel) {
+        setValidationStatus('请先在标准图上点击设置起点和终点。', 'error');
+        return;
+    }
+
+    const runButton = document.getElementById('runValidationBtn');
+    const originalText = runButton.textContent;
+    runButton.disabled = true;
+    runButton.textContent = '规划中...';
+    setValidationStatus('正在规划航线并保存案例...', 'busy');
+
+    try {
+        const payload = buildValidationConfigPayload();
+        payload.scene_id = currentSceneId;
+        payload.case_name = document.getElementById('validationSceneName').value.trim() || 'planning_case';
+        payload.start_pixel = [validationStartPixel.x, validationStartPixel.y];
+        payload.target_pixel = [validationTargetPixel.x, validationTargetPixel.y];
+        payload.safety_factor = Number(document.getElementById('validationSafetyFactor').value);
+        payload.dynamic_ash = document.getElementById('validationDynamicAsh').value === 'true';
+        payload.model_path = document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth';
+        payload.fallback_concentration_limit = getNumericInputValue('validationFallbackLimit', 0.3);
+        payload.max_steps = Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500)));
+        payload.animation_fps = Math.max(1, Math.round(getNumericInputValue('validationFps', 12)));
+        payload.animation_max_frames = Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)));
+
+        const response = await fetch('/api/cases/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '规划失败');
+        }
+
+        updateValidationResultPanel(result);
+        if (result.path_data) {
+            processData({
+                path_data: result.path_data,
+                cloud_info: result.path_data.cloud_info || null,
+                validation_info: result.path_data.validation_info || null
+            });
+        }
+        await refreshCases();
+        setValidationStatus(result.message || '规划完成，结果已保存。', 'success');
+    } catch (error) {
+        console.error('Planning case failed:', error);
+        setValidationStatus(`规划失败：${error.message}`, 'error');
+    } finally {
+        runButton.disabled = false;
+        runButton.textContent = originalText;
+    }
+}
+
+async function refreshCases() {
+    try {
+        const response = await fetch('/api/cases', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '案例列表加载失败');
+        savedCases = result.cases || [];
+        const select = document.getElementById('caseSelect');
+        select.innerHTML = '';
+        if (savedCases.length === 0) {
+            select.innerHTML = '<option value="">暂无结果</option>';
+            return;
+        }
+        savedCases.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.case_id;
+            option.textContent = `${item.case_name || item.case_id} | ${item.created_at || ''}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('refreshCases failed:', error);
+    }
+}
+
+async function loadSelectedCase() {
+    const caseId = document.getElementById('caseSelect').value;
+    if (!caseId) return;
+    try {
+        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}`, { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '案例加载失败');
+        const item = result.case;
+        if (item.scene_id) {
+            currentSceneId = item.scene_id;
+        }
+        if (item.flight) {
+            validationStartPixel = item.flight.start_pixel
+                ? { x: Number(item.flight.start_pixel[0]), y: Number(item.flight.start_pixel[1]) }
+                : null;
+            validationTargetPixel = item.flight.target_pixel
+                ? { x: Number(item.flight.target_pixel[0]), y: Number(item.flight.target_pixel[1]) }
+                : null;
+            applyPixelToGeoInputs();
+        }
+        if (item.map) {
+            document.getElementById('validationImageHeight').value = item.map.image_size ? item.map.image_size[0] : 768;
+            document.getElementById('validationImageWidth').value = item.map.image_size ? item.map.image_size[1] : 768;
+            document.getElementById('validationCenterLat').value = Number(item.map.geo_center_lat || 35).toFixed(4);
+            document.getElementById('validationCenterLon').value = Number(item.map.geo_center_lon || 120).toFixed(4);
+            document.getElementById('validationSpanLat').value = Number(item.map.geo_span_lat || 2).toFixed(2);
+            document.getElementById('validationSpanLon').value = Number(item.map.geo_span_lon || 2).toFixed(2);
+        }
+        if (item.planning) {
+            document.getElementById('validationSafetyFactor').value = String(item.planning.safety_factor || 1.0);
+            document.getElementById('validationDynamicAsh').value = item.planning.dynamic_ash ? 'true' : 'false';
+            if (item.planning.model_path) document.getElementById('validationModelPath').value = item.planning.model_path;
+        }
+        const scenePreviewUrl = item.scene_file_urls && item.scene_file_urls.preview_image;
+        if (scenePreviewUrl) {
+            const preview = document.getElementById('validationConvertedPreview');
+            preview.src = withCacheBust(scenePreviewUrl);
+            preview.style.display = 'block';
+        }
+        validationConvertedMap = {
+            width: item.map && item.map.image_size ? Number(item.map.image_size[1]) : 768,
+            height: item.map && item.map.image_size ? Number(item.map.image_size[0]) : 768,
+            result: item
+        };
+        updateValidationPixelStatus();
+        updateValidationResultPanel({
+            case: item,
+            path_data: item.path_data,
+            animation_gif_url: item.output_urls && item.output_urls.animation_gif,
+            output_file_url: item.output_urls && item.output_urls.planned_path,
+            plot_file_url: item.output_urls && item.output_urls.path_plot
+        });
+        if (item.path_data) {
+            processData({
+                path_data: item.path_data,
+                cloud_info: item.path_data.cloud_info || null,
+                validation_info: item.path_data.validation_info || null
+            });
+        }
+        setValidationStatus('历史结果已载入，可直接播放或重新规划。', 'success');
+    } catch (error) {
+        setValidationStatus(`案例加载失败：${error.message}`, 'error');
+    }
 }
 
 async function runValidationFromImage() {
@@ -1522,6 +1807,8 @@ window.addEventListener('DOMContentLoaded', () => {
     initCesium();
     applySuggestedRoute();
     loadValidationDefaults();
+    refreshScenes();
+    refreshCases();
 });
 
 window.addEventListener('resize', () => {
