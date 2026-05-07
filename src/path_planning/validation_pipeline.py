@@ -59,13 +59,15 @@ class ValidationPipeline:
                        conversion_mode: str = 'auto',
                        invert: Union[bool, str] = 'auto',
                        blur_kernel: int = 5,
+                       plume_scale: float = 1.0,
                        conversion_output_dir: Optional[str] = None) -> Dict:
         converted = self.converter.convert_to_scene(
             image_source,
             scene_name=scene_name,
             mode=conversion_mode,
             invert=invert,
-            blur_kernel=blur_kernel
+            blur_kernel=blur_kernel,
+            plume_scale=plume_scale
         )
         derived_config = converted['config']
         concentration_map = converted['concentration_map']

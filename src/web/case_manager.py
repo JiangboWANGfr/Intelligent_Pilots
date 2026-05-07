@@ -42,14 +42,16 @@ class WebCaseManager:
                             scene_name: str,
                             conversion_mode: str = 'auto',
                             invert='auto',
-                            blur_kernel: int = 5) -> Dict:
+                            blur_kernel: int = 5,
+                            plume_scale: float = 1.0) -> Dict:
         converter = AshImageConverter(config)
         converted = converter.convert_to_scene(
             image_path,
             scene_name=scene_name,
             mode=conversion_mode,
             invert=invert,
-            blur_kernel=blur_kernel
+            blur_kernel=blur_kernel,
+            plume_scale=plume_scale
         )
         scene_id = self.create_scene_id(scene_name)
         scene_dir = self.scene_dir(scene_id)
@@ -82,7 +84,8 @@ class WebCaseManager:
             config_path=config_path,
             extra={
                 'conversion_mode': conversion_mode,
-                'blur_kernel': blur_kernel
+                'blur_kernel': blur_kernel,
+                'plume_scale': plume_scale
             }
         )
         self._write_json(os.path.join(scene_dir, 'scene.json'), manifest)

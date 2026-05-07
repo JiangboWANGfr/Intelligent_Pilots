@@ -221,6 +221,10 @@
                         <input id="validationBlurKernel" class="input-control" type="number" step="2" value="5">
                     </div>
                     <div class="field-group">
+                        <label for="validationPlumeScale">火山灰放大</label>
+                        <input id="validationPlumeScale" class="input-control" type="number" step="0.1" min="0.5" max="6.0" value="2.2">
+                    </div>
+                    <div class="field-group">
                         <label for="validationImageHeight">输出高度</label>
                         <input id="validationImageHeight" class="input-control" type="number" step="1" value="1024">
                     </div>
@@ -247,7 +251,7 @@
                 <div class="form-grid" style="margin-top:10px;">
                     <div class="field-group">
                         <label for="validationSceneName">场景名称</label>
-                        <input id="validationSceneName" class="input-control" type="text" value="富士山火山灰_上海到东京">
+                        <input id="validationSceneName" class="input-control" type="text" value="冰岛火山灰测试">
                     </div>
                     <div class="field-group">
                         <label for="validationFallbackLimit">兜底浓度上限</label>
@@ -270,35 +274,35 @@
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLat">中心纬度</label>
-                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="35.3606">
+                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="63.6314">
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLon">中心经度</label>
-                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="138.7274">
+                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="-19.6130">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLat">纬向跨度</label>
-                        <input id="validationSpanLat" class="input-control" type="number" step="0.01" value="3.00">
+                        <input id="validationSpanLat" class="input-control" type="number" step="0.01" value="8.00">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLon">经向跨度</label>
-                        <input id="validationSpanLon" class="input-control" type="number" step="0.01" value="3.00">
+                        <input id="validationSpanLon" class="input-control" type="number" step="0.01" value="12.00">
                     </div>
                     <div class="field-group">
                         <label for="validationStartLat">起点纬度</label>
-                        <input id="validationStartLat" class="input-control" type="number" step="0.0001" value="31.1443">
+                        <input id="validationStartLat" class="input-control" type="number" step="0.0001" value="62.1000">
                     </div>
                     <div class="field-group">
                         <label for="validationStartLon">起点经度</label>
-                        <input id="validationStartLon" class="input-control" type="number" step="0.0001" value="121.8083">
+                        <input id="validationStartLon" class="input-control" type="number" step="0.0001" value="-28.5000">
                     </div>
                     <div class="field-group">
                         <label for="validationTargetLat">终点纬度</label>
-                        <input id="validationTargetLat" class="input-control" type="number" step="0.0001" value="35.5494">
+                        <input id="validationTargetLat" class="input-control" type="number" step="0.0001" value="66.4000">
                     </div>
                     <div class="field-group">
                         <label for="validationTargetLon">终点经度</label>
-                        <input id="validationTargetLon" class="input-control" type="number" step="0.0001" value="139.7798">
+                        <input id="validationTargetLon" class="input-control" type="number" step="0.0001" value="-8.5000">
                     </div>
                     <div class="field-group">
                         <label for="validationFps">动画 FPS</label>
@@ -774,10 +778,10 @@ function geoToPixel(lat, lon) {
 }
 
 function isGeoInsideScene(lat, lon) {
-    const centerLat = getNumericInputValue('validationCenterLat', 35.3606);
-    const centerLon = getNumericInputValue('validationCenterLon', 138.7274);
-    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 3.0)));
-    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 3.0)));
+    const centerLat = getNumericInputValue('validationCenterLat', 63.6314);
+    const centerLon = getNumericInputValue('validationCenterLon', -19.6130);
+    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 8.0)));
+    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 12.0)));
     return (
         lat >= centerLat - spanLat / 2 &&
         lat <= centerLat + spanLat / 2 &&
@@ -834,8 +838,8 @@ function getValidationPointGeo(kind) {
     const latId = kind === 'start' ? 'validationStartLat' : 'validationTargetLat';
     const lonId = kind === 'start' ? 'validationStartLon' : 'validationTargetLon';
     return {
-        lat: getNumericInputValue(latId, kind === 'start' ? 31.1443 : 35.5494),
-        lon: getNumericInputValue(lonId, kind === 'start' ? 121.8083 : 139.7798)
+        lat: getNumericInputValue(latId, kind === 'start' ? 62.1 : 66.4),
+        lon: getNumericInputValue(lonId, kind === 'start' ? -28.5 : -8.5)
     };
 }
 
@@ -945,9 +949,10 @@ async function convertValidationImage() {
         formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
         formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
         formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 2.2))));
         formData.append('image_size', JSON.stringify([
-            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
-            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
         ]));
         formData.append('config', JSON.stringify(buildValidationConfigPayload()));
 
@@ -1073,21 +1078,21 @@ async function generateRandomScene() {
 }
 
 function applySuggestedRoute() {
-    document.getElementById('validationCenterLat').value = '35.3606';
-    document.getElementById('validationCenterLon').value = '138.7274';
-    document.getElementById('validationSpanLat').value = '3.00';
-    document.getElementById('validationSpanLon').value = '3.00';
-    document.getElementById('validationStartLat').value = '31.1443';
-    document.getElementById('validationStartLon').value = '121.8083';
-    document.getElementById('validationTargetLat').value = '35.5494';
-    document.getElementById('validationTargetLon').value = '139.7798';
+    document.getElementById('validationCenterLat').value = '63.6314';
+    document.getElementById('validationCenterLon').value = '-19.6130';
+    document.getElementById('validationSpanLat').value = '8.00';
+    document.getElementById('validationSpanLon').value = '12.00';
+    document.getElementById('validationStartLat').value = '62.1000';
+    document.getElementById('validationStartLon').value = '-28.5000';
+    document.getElementById('validationTargetLat').value = '66.4000';
+    document.getElementById('validationTargetLon').value = '-8.5000';
     validationStartPixel = geoToPixel(
-        getNumericInputValue('validationStartLat', 31.1443),
-        getNumericInputValue('validationStartLon', 121.8083)
+        getNumericInputValue('validationStartLat', 62.1),
+        getNumericInputValue('validationStartLon', -28.5)
     );
     validationTargetPixel = geoToPixel(
-        getNumericInputValue('validationTargetLat', 35.5494),
-        getNumericInputValue('validationTargetLon', 139.7798)
+        getNumericInputValue('validationTargetLat', 66.4),
+        getNumericInputValue('validationTargetLon', -8.5)
     );
     updateValidationPixelStatus();
     updateRouteSelectionOnGlobe();
@@ -1096,10 +1101,10 @@ function applySuggestedRoute() {
 
 function buildValidationConfigPayload() {
     const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
-    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 35.3606);
-    payload.geo_center_lon = getNumericInputValue('validationCenterLon', 138.7274);
-    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 3.0);
-    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 3.0);
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 63.6314);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -19.6130);
+    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 8.0);
+    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 12.0);
     payload.image_size = [
         Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
         Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
@@ -1441,18 +1446,19 @@ async function runValidationFromImage() {
         formData.append('image_file', validationImageFile);
         formData.append('web_request', 'true');
         formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
-        formData.append('start_lat', String(getNumericInputValue('validationStartLat', 34.3)));
-        formData.append('start_lon', String(getNumericInputValue('validationStartLon', 119.3)));
-        formData.append('target_lat', String(getNumericInputValue('validationTargetLat', 35.7)));
-        formData.append('target_lon', String(getNumericInputValue('validationTargetLon', 120.7)));
+        formData.append('start_lat', String(getNumericInputValue('validationStartLat', 62.1)));
+        formData.append('start_lon', String(getNumericInputValue('validationStartLon', -28.5)));
+        formData.append('target_lat', String(getNumericInputValue('validationTargetLat', 66.4)));
+        formData.append('target_lon', String(getNumericInputValue('validationTargetLon', -8.5)));
         formData.append('fallback_concentration_limit', String(getNumericInputValue('validationFallbackLimit', 0.3)));
         formData.append('animation_fps', String(Math.max(1, Math.round(getNumericInputValue('validationFps', 12)))));
         formData.append('animation_max_frames', String(Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)))));
         formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
         formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 2.2))));
         formData.append('image_size', JSON.stringify([
-            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
-            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
         ]));
         if (validationStartPixel && validationTargetPixel) {
             formData.append('start_pixel', JSON.stringify([validationStartPixel.x, validationStartPixel.y]));
@@ -2107,11 +2113,11 @@ async function loadValidationDefaults() {
         const config = await response.json();
         validationBaseConfig = config;
 
-        document.getElementById('validationSceneName').value = '富士山火山灰_上海到东京';
-        document.getElementById('validationCenterLat').value = '35.3606';
-        document.getElementById('validationCenterLon').value = '138.7274';
-        document.getElementById('validationSpanLat').value = '3.00';
-        document.getElementById('validationSpanLon').value = '3.00';
+        document.getElementById('validationSceneName').value = '冰岛火山灰测试';
+        document.getElementById('validationCenterLat').value = '63.6314';
+        document.getElementById('validationCenterLon').value = '-19.6130';
+        document.getElementById('validationSpanLat').value = '8.00';
+        document.getElementById('validationSpanLon').value = '12.00';
         if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
             document.getElementById('validationImageHeight').value = Math.max(1024, Math.round(Number(config.image_size[0]) || 1024));
             document.getElementById('validationImageWidth').value = Math.max(1024, Math.round(Number(config.image_size[1]) || 1024));

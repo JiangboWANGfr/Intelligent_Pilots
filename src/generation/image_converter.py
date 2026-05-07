@@ -36,16 +36,18 @@ class AshImageConverter:
                                    invert: Union[bool, str] = 'auto',
                                    blur_kernel: int = 5,
                                    clip_percentiles: Tuple[float, float] = (2.0, 98.0),
-                                   mode: str = 'auto') -> np.ndarray:
+                                   mode: str = 'auto',
+                                   plume_scale: float = 1.0) -> np.ndarray:
         image = self.load_image(image_source)
         conversion_mode = str(mode or 'auto').lower()
         if conversion_mode == 'auto':
             conversion_mode = self._choose_conversion_mode(image)
         if conversion_mode == 'color':
-            return self._image_to_concentration_map_color(
+            concentration_map = self._image_to_concentration_map_color(
                 image,
                 blur_kernel=blur_kernel
             )
+            return self._scale_plume(concentration_map, plume_scale)
         if conversion_mode not in {'grayscale', 'gray'}:
             raise ValueError(f'Unsupported conversion mode: {mode}')
 
@@ -71,7 +73,7 @@ class AshImageConverter:
             normalized = 1.0 - normalized
 
         concentration_map = np.power(np.clip(normalized, 0.0, 1.0), 1.15)
-        return concentration_map.astype(np.float32)
+        return self._scale_plume(concentration_map.astype(np.float32), plume_scale)
 
     def _choose_conversion_mode(self, image: np.ndarray) -> str:
         if image.ndim != 3 or image.shape[2] < 3:
@@ -231,12 +233,14 @@ class AshImageConverter:
                          scene_name: str = 'image_derived_scene',
                          invert: Union[bool, str] = 'auto',
                          mode: str = 'auto',
-                         blur_kernel: int = 5) -> Dict:
+                         blur_kernel: int = 5,
+                         plume_scale: float = 1.0) -> Dict:
         concentration_map = self.image_to_concentration_map(
             image_source,
             invert=invert,
             mode=mode,
-            blur_kernel=blur_kernel
+            blur_kernel=blur_kernel,
+            plume_scale=plume_scale
         )
         config = self.estimate_scene_config(concentration_map, scene_name=scene_name)
         return {
@@ -244,6 +248,37 @@ class AshImageConverter:
             'config': config,
             'summary': self.summarize_map(concentration_map)
         }
+
+    def _scale_plume(self, concentration_map: np.ndarray, plume_scale: float) -> np.ndarray:
+        scale = float(plume_scale or 1.0)
+        if abs(scale - 1.0) <= 1e-6:
+            return np.asarray(concentration_map, dtype=np.float32)
+
+        map_array = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
+        height, width = map_array.shape
+        weights = np.clip(map_array, 0.0, 1.0)
+        if float(np.sum(weights)) <= 1e-6:
+            center_x = (width - 1) / 2.0
+            center_y = (height - 1) / 2.0
+        else:
+            ys, xs = np.indices(map_array.shape)
+            total_weight = float(np.sum(weights))
+            center_x = float(np.sum(xs * weights) / total_weight)
+            center_y = float(np.sum(ys * weights) / total_weight)
+
+        matrix = cv2.getRotationMatrix2D((center_x, center_y), 0.0, scale)
+        scaled = cv2.warpAffine(
+            map_array,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0.0
+        )
+        max_value = float(np.max(scaled))
+        if max_value > 1e-6:
+            scaled = scaled / max_value
+        return np.clip(scaled, 0.0, 1.0).astype(np.float32)
 
     def save_standard_outputs(self,
                               concentration_map: np.ndarray,

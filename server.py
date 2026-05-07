@@ -365,6 +365,12 @@ def _safety_adjusted_planning_limits(config, base_limit):
         fallback_cost_safety_factor = 1.0
     return effective_limit, inflation_radius, fallback_cost_safety_factor
 
+def _parse_plume_scale(value, default=1.0):
+    scale = _parse_float(value, default)
+    if scale is None:
+        return float(default)
+    return float(np.clip(scale, 0.5, 6.0))
+
 def _generate_dynamic_maps_for_waypoints(config, concentration_map, waypoint_count):
     if not bool(getattr(config, 'enable_dynamic_ash', False)) or waypoint_count <= 0:
         return None
@@ -634,6 +640,7 @@ def validate_image():
             conversion_mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
             blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2),
             conversion_output_dir=conversion_output_dir
         )
          
@@ -695,7 +702,8 @@ def convert_image():
             scene_name=scene_name,
             mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
-            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5)
+            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2)
         )
         scene_slug = secure_filename(scene_name) or 'image_validation_scene'
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -747,7 +755,8 @@ def import_scene_image():
             scene_name=scene_name,
             conversion_mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
-            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5)
+            blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2)
         )
         return jsonify(_to_jsonable({
             'success': True,

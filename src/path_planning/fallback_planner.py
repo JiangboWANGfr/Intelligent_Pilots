@@ -34,6 +34,10 @@ class FallbackPlanner:
         start_node = self._to_grid(start_pos, stride, coarse_map.shape)
         target_node = self._to_grid(target_pos, stride, coarse_map.shape)
 
+        direct_path = self._interpolate_path([start_pos, target_pos], desired_points, map_array.shape)
+        if self._segment_max_risk(planning_map, start_pos, target_pos) <= threshold:
+            return direct_path
+
         coarse_path = self._astar(
             coarse_map,
             clearance_map,
@@ -54,7 +58,9 @@ class FallbackPlanner:
         fine_path.append(tuple(map(float, target_pos)))
 
         interpolated = self._interpolate_path(fine_path, desired_points, map_array.shape)
-        return self._smooth_path(interpolated, map_array.shape)
+        smoothed = self._smooth_path(interpolated, map_array.shape)
+        straightened = self._straighten_safe_segments(smoothed, planning_map, threshold, map_array.shape)
+        return self._interpolate_path(straightened, desired_points, map_array.shape)
 
     def _inflate_risk_map(self,
                           concentration_map: np.ndarray,
@@ -263,6 +269,42 @@ class FallbackPlanner:
         smoothed[0] = points[0]
         smoothed[-1] = points[-1]
         return [self._clip_point(tuple(point.tolist()), map_shape) for point in smoothed]
+
+    def _straighten_safe_segments(self,
+                                  path_points: List[Tuple[float, float]],
+                                  risk_map: np.ndarray,
+                                  threshold: float,
+                                  map_shape: Tuple[int, int]) -> List[Tuple[float, float]]:
+        if len(path_points) <= 2:
+            return [self._clip_point(point, map_shape) for point in path_points]
+
+        simplified: List[Tuple[float, float]] = [self._clip_point(path_points[0], map_shape)]
+        index = 0
+        while index < len(path_points) - 1:
+            next_index = index + 1
+            for candidate in range(len(path_points) - 1, index, -1):
+                if self._segment_max_risk(risk_map, path_points[index], path_points[candidate]) <= threshold:
+                    next_index = candidate
+                    break
+            simplified.append(self._clip_point(path_points[next_index], map_shape))
+            index = next_index
+        return simplified
+
+    def _segment_max_risk(self,
+                          concentration_map: np.ndarray,
+                          start_pos: Tuple[float, float],
+                          target_pos: Tuple[float, float]) -> float:
+        start = np.asarray(start_pos, dtype=np.float32)
+        end = np.asarray(target_pos, dtype=np.float32)
+        segment_length = float(np.linalg.norm(end - start))
+        steps = max(2, int(np.ceil(segment_length)))
+        max_risk = 0.0
+        for t in np.linspace(0.0, 1.0, steps):
+            point = start * (1.0 - t) + end * t
+            y = int(np.clip(round(point[0]), 0, concentration_map.shape[0] - 1))
+            x = int(np.clip(round(point[1]), 0, concentration_map.shape[1] - 1))
+            max_risk = max(max_risk, float(concentration_map[y, x]))
+        return max_risk
 
     def _clip_point(self,
                     point: Tuple[float, float],
