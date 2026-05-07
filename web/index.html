@@ -354,8 +354,8 @@
             <div class="panel-section">
                 <h3>图层控制</h3>
                 <label class="checkbox-label"><input type="checkbox" id="showCloud" checked onchange="toggleCloud(this.checked)">显示火山灰云</label>
-                <label class="checkbox-label"><input type="checkbox" id="showOriginalRoute" checked onchange="toggleOriginalRoute(this.checked)">显示原始航线</label>
-                <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示规划路径</label>
+                <label class="checkbox-label"><input type="checkbox" id="showOriginalRoute" checked onchange="toggleOriginalRoute(this.checked)">显示直飞参考线</label>
+                <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示规划路径/已飞轨迹</label>
                 <label class="checkbox-label"><input type="checkbox" id="showAircraft" checked onchange="toggleAircraft(this.checked)">显示飞机位置</label>
             </div>
 
@@ -402,6 +402,9 @@
                     <div class="legend-item"><span class="legend-color" style="background:#FFFF00"></span><span>低危 (0.2-0.5)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FFA500"></span><span>中危 (0.5-0.8)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FF0000"></span><span>高危 (&gt;0.8)</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#FFFFFF"></span><span>白色虚线：直飞参考线</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#00FF00"></span><span>绿色实线：完整规划路径</span></div>
+                    <div class="legend-item"><span class="legend-color" style="background:#00FFFF"></span><span>青色亮线：飞机已飞轨迹</span></div>
                 </div>
             </div>
         </div>
@@ -421,6 +424,7 @@ let viewer = null;
 let cloudEntities = [];
 let originalRouteEntity = null;
 let plannedPathEntity = null;
+let flownTraceEntity = null;
 let routeMarkerEntities = [];
 let waypointEntities = [];
 let aircraftEntity = null;
@@ -720,11 +724,15 @@ function updateValidationPixelStatus() {
         ? `标准图: ${validationConvertedMap.width}×${validationConvertedMap.height}`
         : '标准图: 未转换';
     const sceneText = currentSceneId ? `场景: ${currentSceneId}` : '场景: 未选择';
+    const startGeo = getValidationPointGeo('start');
+    const targetGeo = getValidationPointGeo('target');
+    const startInScene = isGeoInsideScene(startGeo.lat, startGeo.lon) ? '局部图内' : '局部图外';
+    const targetInScene = isGeoInsideScene(targetGeo.lat, targetGeo.lon) ? '局部图内' : '局部图外';
     const startText = validationStartPixel
-        ? `起点: x=${validationStartPixel.x}, y=${validationStartPixel.y}`
+        ? `起点: ${startGeo.lat.toFixed(4)}, ${startGeo.lon.toFixed(4)} (${startInScene})`
         : '起点: 未设置';
     const targetText = validationTargetPixel
-        ? `终点: x=${validationTargetPixel.x}, y=${validationTargetPixel.y}`
+        ? `终点: ${targetGeo.lat.toFixed(4)}, ${targetGeo.lon.toFixed(4)} (${targetInScene})`
         : '终点: 未设置';
     const modeText = validationPickMode === 'center' ? '火山中心' : (validationPickMode === 'start' ? '起点' : '终点');
     status.textContent = `${sceneText} | ${mapText} | ${startText} | ${targetText} | 当前点击: ${modeText}`;
@@ -763,6 +771,19 @@ function geoToPixel(lat, lon) {
         x: Math.max(0, Math.min(width - 1, x)),
         y: Math.max(0, Math.min(height - 1, y))
     };
+}
+
+function isGeoInsideScene(lat, lon) {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.3606);
+    const centerLon = getNumericInputValue('validationCenterLon', 138.7274);
+    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 3.0)));
+    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 3.0)));
+    return (
+        lat >= centerLat - spanLat / 2 &&
+        lat <= centerLat + spanLat / 2 &&
+        lon >= centerLon - spanLon / 2 &&
+        lon <= centerLon + spanLon / 2
+    );
 }
 
 function setFlightPixelPoint(pixel, sourceLabel) {
@@ -1156,31 +1177,40 @@ function renderSceneFootprint(scene) {
     }));
 }
 
+function renderVolcanoCenterMarker(lon, lat) {
+    cloudEntities.push(viewer.entities.add({
+        name: 'Volcano Center',
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 10500),
+        point: {
+            pixelSize: 15,
+            color: Cesium.Color.BLACK,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2
+        },
+        label: {
+            text: '火山中心',
+            font: '12px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -20)
+        }
+    }));
+}
+
 function renderCurrentSceneOnGlobe() {
     if (!viewer || !currentScene) return;
     clearCloudLayerOnly();
     const cloudInfo = getSceneCloudInfo(currentScene);
     currentCenterLat = Number(cloudInfo.center_lat || 35.0);
     currentCenterLon = Number(cloudInfo.center_lon || 120.0);
-    const zr = cloudInfo.zone_radii || {};
-    const zoneRadii = {
-        safe: Number(zr.safe || 0.58),
-        low: Number(zr.low || 0.46),
-        medium: Number(zr.medium || 0.37),
-        high: Number(zr.high || 0.30)
-    };
-    const dynamicEnabled = document.getElementById('validationDynamicAsh').value === 'true';
-    createDynamicCloudLayers(
-        currentCenterLon,
-        currentCenterLat,
-        zoneRadii,
-        73,
-        0.55,
-        dynamicEnabled ? 0.004 : 0.0,
-        dynamicEnabled ? 0.00002 : 0.0,
-        80
-    );
     renderSceneFootprint(currentScene);
+    const config = currentScene.config || {};
+    renderVolcanoCenterMarker(
+        Number(config.geo_center_lon || currentCenterLon),
+        Number(config.geo_center_lat || currentCenterLat)
+    );
     updateRouteSelectionOnGlobe();
     setTimeout(() => zoomToCloud(), 250);
 }
@@ -1552,19 +1582,23 @@ function processData(raw) {
 function renderCloudFromWaypoints(waypoints, centerLon, centerLat, cloudInfo) {
     console.log('Rendering cloud from waypoints, center:', centerLon, centerLat);
 
+    if (currentScene && currentScene.file_urls && currentScene.file_urls.overlay_image) {
+        renderSceneFootprint(currentScene);
+        const config = currentScene.config || {};
+        renderVolcanoCenterMarker(
+            Number(config.geo_center_lon || centerLon),
+            Number(config.geo_center_lat || centerLat)
+        );
+        return;
+    }
+
     // 若 JSON 中包含精确计算的区域半径则使用之，否则使用合理的默认值
     const zr = (cloudInfo && cloudInfo.zone_radii) ? cloudInfo.zone_radii : {};
     const zoneRadii = { safe: zr.safe || 0.58, low: zr.low || 0.46, medium: zr.medium || 0.37, high: zr.high || 0.30 };
     console.log('Zone radii (deg):', cloudZoneOrder.map(level => level + ':' + zoneRadii[level].toFixed(3)));
     createDynamicCloudLayers(centerLon, centerLat, zoneRadii, 42, 0.6, 0.025, 0.00010, 72);
 
-    const centerEntity = viewer.entities.add({
-        name: 'Volcano Center',
-        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 10500),
-        point: { pixelSize: 15, color: Cesium.Color.BLACK, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
-        label: { text: '火山中心', font: '12px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -20) }
-    });
-    cloudEntities.push(centerEntity);
+    renderVolcanoCenterMarker(centerLon, centerLat);
 }
 
 function renderScatterCloud(features, metadata) {
@@ -1594,11 +1628,14 @@ function renderScatterCloud(features, metadata) {
 function renderOriginalRoute(start, target) {
     console.log('Rendering original route from', start, 'to', target);
     originalRouteEntity = viewer.entities.add({
-        name: 'Original Route',
+        name: '直飞参考线',
         polyline: {
             positions: Cesium.Cartesian3.fromDegreesArrayHeights([start[0], start[1], 10000, target[0], target[1], 10000]),
-            width: 3,
-            material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.DODGERBLUE, dashLength: 16 }),
+            width: 2,
+            material: new Cesium.PolylineDashMaterialProperty({
+                color: Cesium.Color.WHITE.withAlpha(0.65),
+                dashLength: 18
+            }),
             clampToGround: false
         }
     });
@@ -1626,24 +1663,40 @@ function renderPlannedPath(trajectory) {
     }
 
     plannedPathEntity = viewer.entities.add({
-        name: 'Planned Path',
+        name: '规划路径',
+        polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(
+                trajectory.flatMap(point => [point[0], point[1], point[2] || 10000])
+            ),
+            width: 3,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                color: Cesium.Color.LIME.withAlpha(0.78),
+                glowPower: 0.12
+            }),
+            clampToGround: false
+        }
+    });
+
+    flownTraceEntity = viewer.entities.add({
+        name: '已飞轨迹',
         polyline: {
             positions: new Cesium.CallbackProperty(() => {
-                if (!trajectory || trajectory.length === 0) {
-                    return [];
-                }
+                if (!trajectory || trajectory.length === 0) return [];
                 const cappedIndex = Math.max(0, Math.min(Math.floor(currentIndex), trajectory.length - 1));
                 const positions = [];
                 for (let i = 0; i <= cappedIndex; i++) {
-                    positions.push(trajectory[i][0], trajectory[i][1], trajectory[i][2] || 10000);
+                    positions.push(trajectory[i][0], trajectory[i][1], (trajectory[i][2] || 10000) + 250);
                 }
                 if (positions.length === 3) {
-                    positions.push(trajectory[0][0], trajectory[0][1], trajectory[0][2] || 10000);
+                    positions.push(trajectory[0][0], trajectory[0][1], (trajectory[0][2] || 10000) + 250);
                 }
                 return Cesium.Cartesian3.fromDegreesArrayHeights(positions);
             }, false),
-            width: 4,
-            material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.LIME, glowPower: 0.2 }),
+            width: 5,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                color: Cesium.Color.CYAN,
+                glowPower: 0.22
+            }),
             clampToGround: false
         }
     });
@@ -1802,6 +1855,7 @@ function toggleOriginalRoute(show) {
 function togglePlannedPath(show) {
     plannedPathVisible = show;
     if (plannedPathEntity) plannedPathEntity.show = show;
+    if (flownTraceEntity) flownTraceEntity.show = show;
     updatePlannedPathProgress(currentIndex);
 }
 
@@ -1890,6 +1944,13 @@ function clearAllData() {
             viewer.entities.remove(plannedPathEntity);
         }
         plannedPathEntity = null;
+    }
+
+    if (flownTraceEntity) {
+        if (viewer.entities.contains(flownTraceEntity)) {
+            viewer.entities.remove(flownTraceEntity);
+        }
+        flownTraceEntity = null;
     }
 
     console.log('Clearing waypoint entities:', waypointEntities.length);
