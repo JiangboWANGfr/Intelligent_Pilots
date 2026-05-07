@@ -222,11 +222,11 @@
                     </div>
                     <div class="field-group">
                         <label for="validationImageHeight">输出高度</label>
-                        <input id="validationImageHeight" class="input-control" type="number" step="1" value="768">
+                        <input id="validationImageHeight" class="input-control" type="number" step="1" value="1024">
                     </div>
                     <div class="field-group">
                         <label for="validationImageWidth">输出宽度</label>
-                        <input id="validationImageWidth" class="input-control" type="number" step="1" value="768">
+                        <input id="validationImageWidth" class="input-control" type="number" step="1" value="1024">
                     </div>
                 </div>
                 <button id="convertValidationImageBtn" class="btn btn-full" onclick="convertValidationImage()">导入并保存为火山灰场景</button>
@@ -238,6 +238,7 @@
                     </select>
                 </div>
                 <div class="mode-row">
+                    <button class="btn" onclick="setValidationPickMode('center')">地球上设置火山中心</button>
                     <button class="btn" onclick="setValidationPickMode('start')">地球上设置起点</button>
                     <button class="btn" onclick="setValidationPickMode('target')">地球上设置终点</button>
                 </div>
@@ -246,7 +247,7 @@
                 <div class="form-grid" style="margin-top:10px;">
                     <div class="field-group">
                         <label for="validationSceneName">场景名称</label>
-                        <input id="validationSceneName" class="input-control" type="text" value="image_validation_scene">
+                        <input id="validationSceneName" class="input-control" type="text" value="富士山火山灰_上海到东京">
                     </div>
                     <div class="field-group">
                         <label for="validationFallbackLimit">兜底浓度上限</label>
@@ -269,35 +270,35 @@
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLat">中心纬度</label>
-                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="35.0000">
+                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="35.3606">
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLon">中心经度</label>
-                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="120.0000">
+                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="138.7274">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLat">纬向跨度</label>
-                        <input id="validationSpanLat" class="input-control" type="number" step="0.01" value="2.00">
+                        <input id="validationSpanLat" class="input-control" type="number" step="0.01" value="3.00">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLon">经向跨度</label>
-                        <input id="validationSpanLon" class="input-control" type="number" step="0.01" value="2.00">
+                        <input id="validationSpanLon" class="input-control" type="number" step="0.01" value="3.00">
                     </div>
                     <div class="field-group">
                         <label for="validationStartLat">起点纬度</label>
-                        <input id="validationStartLat" class="input-control" type="number" step="0.0001" value="34.3000">
+                        <input id="validationStartLat" class="input-control" type="number" step="0.0001" value="31.1443">
                     </div>
                     <div class="field-group">
                         <label for="validationStartLon">起点经度</label>
-                        <input id="validationStartLon" class="input-control" type="number" step="0.0001" value="119.3000">
+                        <input id="validationStartLon" class="input-control" type="number" step="0.0001" value="121.8083">
                     </div>
                     <div class="field-group">
                         <label for="validationTargetLat">终点纬度</label>
-                        <input id="validationTargetLat" class="input-control" type="number" step="0.0001" value="35.7000">
+                        <input id="validationTargetLat" class="input-control" type="number" step="0.0001" value="35.5494">
                     </div>
                     <div class="field-group">
                         <label for="validationTargetLon">终点经度</label>
-                        <input id="validationTargetLon" class="input-control" type="number" step="0.0001" value="120.7000">
+                        <input id="validationTargetLon" class="input-control" type="number" step="0.0001" value="139.7798">
                     </div>
                     <div class="field-group">
                         <label for="validationFps">动画 FPS</label>
@@ -725,13 +726,15 @@ function updateValidationPixelStatus() {
     const targetText = validationTargetPixel
         ? `终点: x=${validationTargetPixel.x}, y=${validationTargetPixel.y}`
         : '终点: 未设置';
-    status.textContent = `${sceneText} | ${mapText} | ${startText} | ${targetText} | 当前点击: ${validationPickMode === 'start' ? '起点' : '终点'}`;
+    const modeText = validationPickMode === 'center' ? '火山中心' : (validationPickMode === 'start' ? '起点' : '终点');
+    status.textContent = `${sceneText} | ${mapText} | ${startText} | ${targetText} | 当前点击: ${modeText}`;
 }
 
 function setValidationPickMode(mode) {
-    validationPickMode = mode === 'target' ? 'target' : 'start';
+    validationPickMode = mode === 'center' ? 'center' : (mode === 'target' ? 'target' : 'start');
     updateValidationPixelStatus();
-    setValidationStatus(`当前可在地球或标准图上点击设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
+    const modeText = validationPickMode === 'center' ? '火山中心' : (validationPickMode === 'start' ? '起点' : '终点');
+    setValidationStatus(`当前可在地球上点击设置${modeText}。标准图点击只用于起点和终点。`);
 }
 
 function pixelToGeo(pixel) {
@@ -776,6 +779,23 @@ function setFlightPixelPoint(pixel, sourceLabel) {
     setValidationStatus(`${sourceLabel || '点击'}已设置，当前等待设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
 }
 
+function setFlightGeoPoint(kind, lat, lon, sourceLabel) {
+    if (kind === 'start') {
+        document.getElementById('validationStartLat').value = lat.toFixed(4);
+        document.getElementById('validationStartLon').value = lon.toFixed(4);
+        validationStartPixel = geoToPixel(lat, lon);
+        validationPickMode = 'target';
+    } else {
+        document.getElementById('validationTargetLat').value = lat.toFixed(4);
+        document.getElementById('validationTargetLon').value = lon.toFixed(4);
+        validationTargetPixel = geoToPixel(lat, lon);
+        validationPickMode = 'start';
+    }
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    setValidationStatus(`${sourceLabel || '地球点击'}已设置，当前等待设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
+}
+
 function applyPixelToGeoInputs() {
     if (validationStartPixel) {
         const geo = pixelToGeo(validationStartPixel);
@@ -793,8 +813,8 @@ function getValidationPointGeo(kind) {
     const latId = kind === 'start' ? 'validationStartLat' : 'validationTargetLat';
     const lonId = kind === 'start' ? 'validationStartLon' : 'validationTargetLon';
     return {
-        lat: getNumericInputValue(latId, kind === 'start' ? 34.3 : 35.7),
-        lon: getNumericInputValue(lonId, kind === 'start' ? 119.3 : 120.7)
+        lat: getNumericInputValue(latId, kind === 'start' ? 31.1443 : 35.5494),
+        lon: getNumericInputValue(lonId, kind === 'start' ? 121.8083 : 139.7798)
     };
 }
 
@@ -850,16 +870,32 @@ function updateRouteSelectionOnGlobe() {
 }
 
 function handleGlobeClick(click) {
-    if (!currentScene || !validationConvertedMap) {
-        return;
-    }
     const cartesian = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (!cartesian) return;
     const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
     const lat = Cesium.Math.toDegrees(cartographic.latitude);
     const lon = Cesium.Math.toDegrees(cartographic.longitude);
-    const pixel = geoToPixel(lat, lon);
-    setFlightPixelPoint(pixel, '地球点击');
+    if (validationPickMode === 'center') {
+        document.getElementById('validationCenterLat').value = lat.toFixed(4);
+        document.getElementById('validationCenterLon').value = lon.toFixed(4);
+        if (currentScene) {
+            currentScene.config = currentScene.config || {};
+            currentScene.config.geo_center_lat = lat;
+            currentScene.config.geo_center_lon = lon;
+            renderCurrentSceneOnGlobe();
+        } else {
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lon, lat, 900000),
+                orientation: { heading: 0, pitch: Cesium.Math.toRadians(-65), roll: 0 },
+                duration: 1.0
+            });
+        }
+        setValidationStatus('火山中心已设置。现在可以导入或生成火山灰图。', 'success');
+        validationPickMode = 'start';
+        updateValidationPixelStatus();
+        return;
+    }
+    setFlightGeoPoint(validationPickMode, lat, lon, '地球点击');
 }
 
 function handleConvertedMapClick(event) {
@@ -1022,36 +1058,36 @@ async function generateRandomScene() {
 }
 
 function applySuggestedRoute() {
-    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
-    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
-    const spanLat = getNumericInputValue('validationSpanLat', 2.0);
-    const spanLon = getNumericInputValue('validationSpanLon', 2.0);
-
-    document.getElementById('validationStartLat').value = (centerLat - spanLat * 0.35).toFixed(4);
-    document.getElementById('validationStartLon').value = (centerLon - spanLon * 0.35).toFixed(4);
-    document.getElementById('validationTargetLat').value = (centerLat + spanLat * 0.35).toFixed(4);
-    document.getElementById('validationTargetLon').value = (centerLon + spanLon * 0.35).toFixed(4);
+    document.getElementById('validationCenterLat').value = '35.3606';
+    document.getElementById('validationCenterLon').value = '138.7274';
+    document.getElementById('validationSpanLat').value = '3.00';
+    document.getElementById('validationSpanLon').value = '3.00';
+    document.getElementById('validationStartLat').value = '31.1443';
+    document.getElementById('validationStartLon').value = '121.8083';
+    document.getElementById('validationTargetLat').value = '35.5494';
+    document.getElementById('validationTargetLon').value = '139.7798';
     validationStartPixel = geoToPixel(
-        getNumericInputValue('validationStartLat', centerLat - spanLat * 0.35),
-        getNumericInputValue('validationStartLon', centerLon - spanLon * 0.35)
+        getNumericInputValue('validationStartLat', 31.1443),
+        getNumericInputValue('validationStartLon', 121.8083)
     );
     validationTargetPixel = geoToPixel(
-        getNumericInputValue('validationTargetLat', centerLat + spanLat * 0.35),
-        getNumericInputValue('validationTargetLon', centerLon + spanLon * 0.35)
+        getNumericInputValue('validationTargetLat', 35.5494),
+        getNumericInputValue('validationTargetLon', 139.7798)
     );
     updateValidationPixelStatus();
     updateRouteSelectionOnGlobe();
+    if (currentScene) renderCurrentSceneOnGlobe();
 }
 
 function buildValidationConfigPayload() {
     const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
-    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 35.0);
-    payload.geo_center_lon = getNumericInputValue('validationCenterLon', 120.0);
-    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 2.0);
-    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 2.0);
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 35.3606);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', 138.7274);
+    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 3.0);
+    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 3.0);
     payload.image_size = [
-        Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768))),
-        Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)))
+        Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+        Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
     ];
     payload.concentration_threshold = getNumericInputValue('validationFallbackLimit', 0.3);
     return payload;
@@ -1184,13 +1220,15 @@ async function runPlanningCase() {
         setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
         return;
     }
+    const startGeo = getValidationPointGeo('start');
+    const targetGeo = getValidationPointGeo('target');
     validationStartPixel = geoToPixel(
-        getNumericInputValue('validationStartLat', 34.3),
-        getNumericInputValue('validationStartLon', 119.3)
+        startGeo.lat,
+        startGeo.lon
     );
     validationTargetPixel = geoToPixel(
-        getNumericInputValue('validationTargetLat', 35.7),
-        getNumericInputValue('validationTargetLon', 120.7)
+        targetGeo.lat,
+        targetGeo.lon
     );
     updateValidationPixelStatus();
     updateRouteSelectionOnGlobe();
@@ -1211,8 +1249,9 @@ async function runPlanningCase() {
         const payload = buildValidationConfigPayload();
         payload.scene_id = currentSceneId;
         payload.case_name = document.getElementById('validationSceneName').value.trim() || 'planning_case';
-        payload.start_pixel = [validationStartPixel.x, validationStartPixel.y];
-        payload.target_pixel = [validationTargetPixel.x, validationTargetPixel.y];
+        payload.start_position = [startGeo.lat, startGeo.lon];
+        payload.target_position = [targetGeo.lat, targetGeo.lon];
+        payload.planning_image_size = [1024, 1024];
         payload.safety_factor = Number(document.getElementById('validationSafetyFactor').value);
         payload.dynamic_ash = document.getElementById('validationDynamicAsh').value === 'true';
         payload.model_path = document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth';
@@ -2016,19 +2055,14 @@ async function loadValidationDefaults() {
         const config = await response.json();
         validationBaseConfig = config;
 
-        const centerLat = Number.isFinite(Number(config.geo_center_lat)) ? Number(config.geo_center_lat) : 35.0;
-        const centerLon = Number.isFinite(Number(config.geo_center_lon)) ? Number(config.geo_center_lon) : 120.0;
-        const spanLat = Number.isFinite(Number(config.geo_span_lat)) ? Number(config.geo_span_lat) : 2.0;
-        const spanLon = Number.isFinite(Number(config.geo_span_lon)) ? Number(config.geo_span_lon) : 2.0;
-
-        document.getElementById('validationSceneName').value = config.scene_name || 'image_validation_scene';
-        document.getElementById('validationCenterLat').value = centerLat.toFixed(4);
-        document.getElementById('validationCenterLon').value = centerLon.toFixed(4);
-        document.getElementById('validationSpanLat').value = spanLat.toFixed(2);
-        document.getElementById('validationSpanLon').value = spanLon.toFixed(2);
+        document.getElementById('validationSceneName').value = '富士山火山灰_上海到东京';
+        document.getElementById('validationCenterLat').value = '35.3606';
+        document.getElementById('validationCenterLon').value = '138.7274';
+        document.getElementById('validationSpanLat').value = '3.00';
+        document.getElementById('validationSpanLon').value = '3.00';
         if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
-            document.getElementById('validationImageHeight').value = Math.round(Number(config.image_size[0]) || 768);
-            document.getElementById('validationImageWidth').value = Math.round(Number(config.image_size[1]) || 768);
+            document.getElementById('validationImageHeight').value = Math.max(1024, Math.round(Number(config.image_size[0]) || 1024));
+            document.getElementById('validationImageWidth').value = Math.max(1024, Math.round(Number(config.image_size[1]) || 1024));
         }
         if (Number.isFinite(Number(config.concentration_threshold))) {
             document.getElementById('validationFallbackLimit').value = Number(config.concentration_threshold).toFixed(2);

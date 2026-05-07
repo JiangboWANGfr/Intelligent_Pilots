@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 os.environ.setdefault('MPLBACKEND', 'Agg')
 import json
+import cv2
 import numpy as np
 from urllib.parse import quote
 from werkzeug.utils import secure_filename
@@ -282,6 +283,70 @@ def _apply_planning_options(config, payload):
     if interval is not None:
         config.ash_local_flow_update_interval = max(1, interval)
     return config
+
+def _geo_bounds_from_config(config):
+    half_lat = float(config.geo_span_lat) / 2.0
+    half_lon = float(config.geo_span_lon) / 2.0
+    return {
+        'south': float(config.geo_center_lat) - half_lat,
+        'north': float(config.geo_center_lat) + half_lat,
+        'west': float(config.geo_center_lon) - half_lon,
+        'east': float(config.geo_center_lon) + half_lon
+    }
+
+def _geo_to_pixel_in_config(config, lat, lon):
+    img_h, img_w = tuple(config.image_size)
+    px = int(round((float(lon) - config.geo_center_lon) / config.geo_span_lon * img_w + img_w / 2))
+    py = int(round((0.5 - (float(lat) - config.geo_center_lat) / config.geo_span_lat) * img_h))
+    return py, px
+
+def _expand_planning_config_for_route(scene_config, start_geo, target_geo, planning_image_size=(1024, 1024)):
+    scene_bounds = _geo_bounds_from_config(scene_config)
+    margin_lat = max(float(scene_config.geo_span_lat) * 0.45, 0.6)
+    margin_lon = max(float(scene_config.geo_span_lon) * 0.45, 0.6)
+    lats = [scene_bounds['south'], scene_bounds['north'], float(start_geo[0]), float(target_geo[0])]
+    lons = [scene_bounds['west'], scene_bounds['east'], float(start_geo[1]), float(target_geo[1])]
+    south = max(-89.0, min(lats) - margin_lat)
+    north = min(89.0, max(lats) + margin_lat)
+    west = max(-179.0, min(lons) - margin_lon)
+    east = min(179.0, max(lons) + margin_lon)
+
+    planning_config = scene_config.from_dict(scene_config.to_dict())
+    planning_config.geo_center_lat = (south + north) / 2.0
+    planning_config.geo_center_lon = (west + east) / 2.0
+    planning_config.geo_span_lat = max(north - south, float(scene_config.geo_span_lat))
+    planning_config.geo_span_lon = max(east - west, float(scene_config.geo_span_lon))
+    planning_config.image_size = tuple(planning_image_size)
+    return planning_config
+
+def _embed_scene_map_in_planning_map(scene_map, scene_config, planning_config):
+    planning_h, planning_w = tuple(planning_config.image_size)
+    planning_map = np.zeros((planning_h, planning_w), dtype=np.float32)
+    scene_bounds = _geo_bounds_from_config(scene_config)
+
+    y_north, x_west = _geo_to_pixel_in_config(planning_config, scene_bounds['north'], scene_bounds['west'])
+    y_south, x_east = _geo_to_pixel_in_config(planning_config, scene_bounds['south'], scene_bounds['east'])
+    x0, x1 = sorted((x_west, x_east))
+    y0, y1 = sorted((y_north, y_south))
+    x0_clip, x1_clip = max(0, x0), min(planning_w, x1)
+    y0_clip, y1_clip = max(0, y0), min(planning_h, y1)
+    if x1_clip <= x0_clip or y1_clip <= y0_clip:
+        return planning_map
+
+    resized = cv2.resize(
+        np.asarray(scene_map, dtype=np.float32),
+        (max(1, x1 - x0), max(1, y1 - y0)),
+        interpolation=cv2.INTER_LINEAR
+    )
+    sx0 = x0_clip - x0
+    sx1 = sx0 + (x1_clip - x0_clip)
+    sy0 = y0_clip - y0
+    sy1 = sy0 + (y1_clip - y0_clip)
+    planning_map[y0_clip:y1_clip, x0_clip:x1_clip] = np.maximum(
+        planning_map[y0_clip:y1_clip, x0_clip:x1_clip],
+        resized[sy0:sy1, sx0:sx1]
+    )
+    return planning_map
 
 def _generate_dynamic_maps_for_waypoints(config, concentration_map, waypoint_count):
     if not bool(getattr(config, 'enable_dynamic_ash', False)) or waypoint_count <= 0:
@@ -765,15 +830,43 @@ def run_case():
         if not scene_id:
             raise ValueError('scene_id is required')
         scene = manager.load_scene(scene_id)
-        concentration_map = manager.load_scene_map(scene)
-        config = VolcanicAshConfig.from_dict(scene.get('config', {}))
-        config = _apply_planning_options(config, data)
+        scene_concentration_map = manager.load_scene_map(scene)
+        scene_config = VolcanicAshConfig.from_dict(scene.get('config', {}))
+        requested_scene_config = _apply_conversion_request_config(
+            VolcanicAshConfig.from_dict(scene_config.to_dict()),
+            data
+        )
+        config = _apply_planning_options(VolcanicAshConfig.from_dict(requested_scene_config.to_dict()), data)
 
         scene_name = str(data.get('case_name') or scene.get('scene_name') or 'planning_case')
         case_meta = manager.create_case_dir(scene_name)
         case_id = case_meta['case_id']
         case_dir = case_meta['case_dir']
         copied_scene_files = manager.copy_scene_files_to_case(scene, case_dir)
+
+        start_pixel = _parse_pixel_pair(data, 'start_pixel', 'start_pixel_x', 'start_pixel_y')
+        target_pixel = _parse_pixel_pair(data, 'target_pixel', 'target_pixel_x', 'target_pixel_y')
+        default_start = (
+            31.1443,
+            121.8083
+        )
+        default_target = (
+            35.5494,
+            139.7798
+        )
+        start_geo = _parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start)
+        target_geo = _parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target)
+
+        if start_pixel is None or target_pixel is None:
+            requested_size = _parse_size_pair(data.get('planning_image_size'), (1024, 1024))
+            config = _expand_planning_config_for_route(config, start_geo, target_geo, requested_size)
+            concentration_map = _embed_scene_map_in_planning_map(
+                scene_concentration_map,
+                requested_scene_config,
+                config
+            )
+        else:
+            concentration_map = scene_concentration_map
 
         agent = build_agent_for_config(
             config,
@@ -783,19 +876,7 @@ def run_case():
         planner = PathPlanner(config, agent)
         planner.set_external_concentration_map(concentration_map, scene_name=scene_name)
 
-        start_pixel = _parse_pixel_pair(data, 'start_pixel', 'start_pixel_x', 'start_pixel_y')
-        target_pixel = _parse_pixel_pair(data, 'target_pixel', 'target_pixel_x', 'target_pixel_y')
         if start_pixel is None or target_pixel is None:
-            default_start = (
-                config.geo_center_lat - config.geo_span_lat * 0.35,
-                config.geo_center_lon - config.geo_span_lon * 0.35
-            )
-            default_target = (
-                config.geo_center_lat + config.geo_span_lat * 0.35,
-                config.geo_center_lon + config.geo_span_lon * 0.35
-            )
-            start_geo = _parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start)
-            target_geo = _parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target)
             start_pixel, target_pixel = planner.convert_geo_input(start_geo, target_geo)
         else:
             x0, y0 = start_pixel
