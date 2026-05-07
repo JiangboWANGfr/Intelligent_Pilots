@@ -141,7 +141,11 @@ class FallbackPlanner:
                 clearance_ratio = clearance_risk / safe_threshold
                 excess_ratio = max(0.0, risk - threshold) / safe_threshold
                 clearance_excess_ratio = max(0.0, clearance_risk - threshold) / safe_threshold
-                safety_factor = max(float(getattr(self.config, 'fixed_safety_factor', 1.0)), 0.05)
+                safety_factor = max(float(getattr(
+                    self.config,
+                    'fallback_cost_safety_factor',
+                    getattr(self.config, 'fixed_safety_factor', 1.0)
+                )), 0.02)
                 risk_penalty = (
                     1.0
                     + safety_factor * (

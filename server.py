@@ -348,6 +348,23 @@ def _embed_scene_map_in_planning_map(scene_map, scene_config, planning_config):
     )
     return planning_map
 
+def _safety_adjusted_planning_limits(config, base_limit):
+    safety_factor = max(float(getattr(config, 'fixed_safety_factor', 1.0)), 0.05)
+    base = float(base_limit)
+    if safety_factor <= 0.75:
+        effective_limit = min(0.82, base + 0.28)
+        inflation_radius = max(1.0, float(getattr(config, 'path_risk_inflation_radius', 8.0)) * 0.45)
+        fallback_cost_safety_factor = 0.08
+    elif safety_factor >= 1.5:
+        effective_limit = max(0.08, base * 0.45)
+        inflation_radius = max(10.0, float(getattr(config, 'path_risk_inflation_radius', 8.0)) * 2.2)
+        fallback_cost_safety_factor = 2.4
+    else:
+        effective_limit = base
+        inflation_radius = float(getattr(config, 'path_risk_inflation_radius', 8.0))
+        fallback_cost_safety_factor = 1.0
+    return effective_limit, inflation_radius, fallback_cost_safety_factor
+
 def _generate_dynamic_maps_for_waypoints(config, concentration_map, waypoint_count):
     if not bool(getattr(config, 'enable_dynamic_ash', False)) or waypoint_count <= 0:
         return None
@@ -868,7 +885,8 @@ def run_case():
         else:
             concentration_map = scene_concentration_map
 
-        agent = build_agent_for_config(
+        prefer_fallback = _parse_bool(data.get('prefer_fallback_planner'), default=False)
+        agent = None if prefer_fallback else build_agent_for_config(
             config,
             model_path=data.get('model_path', 'models/final_model.pth'),
             allow_missing_model=True
@@ -889,10 +907,15 @@ def run_case():
 
         max_steps = _parse_int(data.get('max_steps'), 500)
         fallback_limit = _parse_float(data.get('fallback_concentration_limit'), config.concentration_threshold)
+        effective_fallback_limit, effective_risk_radius, fallback_cost_safety_factor = _safety_adjusted_planning_limits(
+            config,
+            fallback_limit
+        )
+        setattr(config, 'fallback_cost_safety_factor', fallback_cost_safety_factor)
         used_fallback = False
         fallback_reason = ''
         rl_result = None
-        if agent is not None:
+        if agent is not None and not prefer_fallback:
             try:
                 rl_result = planner.plan_path(tuple(start_pixel), tuple(target_pixel), max_steps=max_steps)
                 rl_result['start_geo'] = list(start_geo)
@@ -903,10 +926,13 @@ def run_case():
             except Exception as exc:
                 fallback_reason = f'rl_error:{exc}'
 
-        if rl_result is None:
+        if prefer_fallback:
+            used_fallback = True
+            fallback_reason = 'safety_aware_web_planner'
+        elif rl_result is None:
             used_fallback = True
             fallback_reason = fallback_reason or 'rl_agent_unavailable'
-        elif (not rl_result.get('success', False) or rl_result.get('max_concentration', 1.0) > fallback_limit):
+        elif (not rl_result.get('success', False) or rl_result.get('max_concentration', 1.0) > effective_fallback_limit):
             used_fallback = True
             fallback_reason = 'rl_path_rejected'
 
@@ -915,7 +941,8 @@ def run_case():
                 concentration_map,
                 tuple(start_pixel),
                 tuple(target_pixel),
-                max_concentration=fallback_limit,
+                max_concentration=effective_fallback_limit,
+                risk_inflation_radius=effective_risk_radius,
                 desired_points=160
             )
             path_result = planner.build_path_data_from_pixel_path(
@@ -930,6 +957,9 @@ def run_case():
                 'used_fallback': True,
                 'fallback_reason': fallback_reason,
                 'fallback_limit': fallback_limit,
+                'effective_fallback_limit': effective_fallback_limit,
+                'effective_risk_inflation_radius': effective_risk_radius,
+                'fallback_cost_safety_factor': fallback_cost_safety_factor,
                 'fallback_summary': FallbackPlanner(config).summarize_path(concentration_map, fallback_points),
                 'scene_id': scene_id,
                 'case_id': case_id
@@ -946,6 +976,9 @@ def run_case():
                 'used_fallback': False,
                 'fallback_reason': '',
                 'fallback_limit': fallback_limit,
+                'effective_fallback_limit': effective_fallback_limit,
+                'effective_risk_inflation_radius': effective_risk_radius,
+                'fallback_cost_safety_factor': fallback_cost_safety_factor,
                 'scene_id': scene_id,
                 'case_id': case_id
             }
@@ -1017,6 +1050,9 @@ def run_case():
                 'dynamic_ash': bool(config.enable_dynamic_ash),
                 'max_steps': max_steps,
                 'fallback_concentration_limit': fallback_limit,
+                'effective_fallback_concentration_limit': effective_fallback_limit,
+                'effective_risk_inflation_radius': effective_risk_radius,
+                'fallback_cost_safety_factor': fallback_cost_safety_factor,
                 'planning_method': json_ready_result.get('planning_method')
             },
             'outputs': outputs,

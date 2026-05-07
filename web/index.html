@@ -1281,6 +1281,7 @@ async function runPlanningCase() {
         payload.planning_image_size = [1024, 1024];
         payload.safety_factor = Number(document.getElementById('validationSafetyFactor').value);
         payload.dynamic_ash = document.getElementById('validationDynamicAsh').value === 'true';
+        payload.prefer_fallback_planner = true;
         payload.model_path = document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth';
         payload.fallback_concentration_limit = getNumericInputValue('validationFallbackLimit', 0.3);
         payload.max_steps = Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500)));
@@ -1537,11 +1538,7 @@ function processData(raw) {
             updateStats();
             updateDataStatus('loaded', '已加载');
 
-            console.log('Scheduling zoom in 500ms...');
-            setTimeout(() => {
-                console.log('Executing zoom to:', currentCenterLon, currentCenterLat);
-                zoomToCloud();
-            }, 500);
+            console.log('Loaded planning result without changing camera view');
         } else if (raw.features || raw.planned_path) {
             console.log('Processing alternative data format');
             data = raw;
@@ -1565,10 +1562,7 @@ function processData(raw) {
             updateStats();
             updateDataStatus('loaded', '已加载');
 
-            setTimeout(() => {
-                console.log('Zooming to cloud at:', currentCenterLon, currentCenterLat);
-                zoomToCloud();
-            }, 500);
+            console.log('Loaded data without changing camera view');
         } else {
             console.error('Unknown data format, available keys:', Object.keys(raw));
             updateDataStatus('error', '格式错误');
