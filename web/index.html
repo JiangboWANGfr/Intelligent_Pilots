@@ -109,22 +109,6 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
-        #statsPanel {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 200px;
-            background: rgba(42, 42, 54, 0.95);
-            border-radius: 8px;
-            padding: 15px;
-            color: #fff;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            z-index: 999;
-        }
-        #statsPanel h3 { font-size: 14px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #444; }
-        .stat-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
-        .stat-label { color: #999; }
-
         #dataStatus { display: inline-block; margin-left: 10px; font-size: 12px; color: #999; }
         #dataStatus.loaded { color: #4caf50; }
         #dataStatus.error { color: #f44336; }
@@ -181,6 +165,32 @@
         .mode-row { display: flex; gap: 6px; margin-top: 6px; }
         .mode-row .btn { flex: 1; padding: 6px 8px; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .checkpoint-demo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .checkpoint-demo-item {
+            padding: 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(124, 199, 255, 0.12);
+        }
+        .checkpoint-demo-item strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .checkpoint-demo-meta {
+            font-size: 12px;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+        .checkpoint-demo-item .btn {
+            margin-top: 8px;
+            width: 100%;
+        }
 
         #controlPanel::-webkit-scrollbar { width: 6px; }
         #controlPanel::-webkit-scrollbar-track { background: #2a2a36; }
@@ -189,7 +199,6 @@
 
         @media (max-width: 768px) {
             #controlPanel { width: 100%; max-height: 40vh; top: auto; bottom: 0; left: 0; border-radius: 8px 8px 0 0; }
-            #statsPanel { width: calc(100% - 20px); top: 10px; right: 10px; }
             .form-grid { grid-template-columns: 1fr; }
         }
     </style>
@@ -274,11 +283,11 @@
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLat">中心纬度</label>
-                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="62.2005">
+                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="58.7237">
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLon">中心经度</label>
-                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="-18.5217">
+                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="-20.3087">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLat">纬向跨度</label>
@@ -322,14 +331,20 @@
                     </div>
                 </div>
                 <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
-                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runPlanningCase()">规划/测试并播放</button>
-                <button id="saveCaseBtn" class="btn btn-full" onclick="saveLatestCase()" disabled>保存当前结果</button>
+                <button id="runValidationBtn" class="btn btn-success btn-full" onclick="runPlanningCase()">规划并立即播放</button>
+                <button id="saveCaseBtn" class="btn btn-full" onclick="saveLatestCase()" disabled>保存为动画和案例</button>
+                <button id="checkpointDemoBtn" class="btn btn-full" onclick="runCheckpointDemo()">Checkpoint 过程演示</button>
+                <button id="checkpointDemoPlayAllBtn" class="btn btn-full" onclick="playAllCheckpointStages()" disabled>播放全过程阶段</button>
                 <div id="validationStatus" class="status-note">导入或生成火山灰场景后，会先加载到地球上。</div>
                 <div id="validationResultCard" class="result-card">
                     <div class="info-row"><span class="label">案例 ID:</span><span id="validationCaseId">--</span></div>
                     <div class="info-row"><span class="label">规划方式:</span><span id="validationMethod">--</span></div>
                     <div class="info-row"><span class="label">回退情况:</span><span id="validationFallback">--</span></div>
                     <div class="info-row"><span class="label">场景名称:</span><span id="validationScene">--</span></div>
+                    <div class="info-row"><span class="label">成功状态:</span><span id="validationSuccess">--</span></div>
+                    <div class="info-row"><span class="label">最大浓度:</span><span id="validationMaxConc">--</span></div>
+                    <div class="info-row"><span class="label">火山灰暴露:</span><span id="validationExposure">--</span></div>
+                    <div class="info-row"><span class="label">总奖励:</span><span id="validationReward">--</span></div>
                     <div class="info-row"><span class="label">动画帧数:</span><span id="validationFrames">--</span></div>
                     <div class="link-list">
                         <a id="validationGifLink" href="#" target="_blank" rel="noopener" style="display:none">打开 GIF 动画</a>
@@ -337,6 +352,10 @@
                         <a id="validationPlotLink" href="#" target="_blank" rel="noopener" style="display:none">打开路径图</a>
                     </div>
                     <img id="validationGifPreview" class="media-preview" alt="验证 GIF 预览">
+                </div>
+                <div id="checkpointDemoCard" class="result-card">
+                    <div class="info-row"><span class="label">过程演示:</span><span id="checkpointDemoSummary">--</span></div>
+                    <div id="checkpointDemoList" class="checkpoint-demo-list"></div>
                 </div>
                 <div class="field-group" style="margin-top:10px;">
                     <label for="caseSelect">历史规划结果</label>
@@ -358,7 +377,7 @@
             <div class="panel-section">
                 <h3>图层控制</h3>
                 <label class="checkbox-label"><input type="checkbox" id="showCloud" checked onchange="toggleCloud(this.checked)">显示火山灰云</label>
-                <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示规划路径/已飞轨迹</label>
+                <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示已飞轨迹</label>
                 <label class="checkbox-label"><input type="checkbox" id="showAircraft" checked onchange="toggleAircraft(this.checked)">显示飞机位置</label>
             </div>
 
@@ -405,18 +424,11 @@
                     <div class="legend-item"><span class="legend-color" style="background:#FFFF00"></span><span>低危 (0.2-0.5)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FFA500"></span><span>中危 (0.5-0.8)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FF0000"></span><span>高危 (&gt;0.8)</span></div>
-                    <div class="legend-item"><span class="legend-color" style="background:#00FF00"></span><span>绿色实线：完整规划路径</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#00FFFF"></span><span>青色亮线：飞机已飞轨迹</span></div>
                 </div>
             </div>
         </div>
 
-        <div id="statsPanel">
-            <h3>航线统计</h3>
-            <div class="stat-item"><span class="stat-label">路径长度:</span><span id="statDistance">--</span></div>
-            <div class="stat-item"><span class="stat-label">最大浓度:</span><span id="statMaxConc">--</span></div>
-            <div class="stat-item"><span class="stat-label">航线偏离:</span><span id="statDeviation">--</span></div>
-        </div>
     </div>
 
 <script>
@@ -455,6 +467,18 @@ let savedScenes = [];
 let savedCases = [];
 let globePickHandler = null;
 let latestPlanningCase = null;
+let latestPlanningRequest = null;
+let latestCheckpointDemoItems = [];
+let latestRouteStats = null;
+let sceneOverlayEntity = null;
+let sceneOverlayStaticUrl = null;
+let activeDynamicOverlayFrames = [];
+let checkpointPlaybackState = {
+    active: false,
+    index: -1,
+    delayMs: 900,
+    preserveOnClear: false
+};
 
 // ===== 动态云状态 =====
 let cloudAnimStartTime = null;      // 云动画开始时间（ms）
@@ -776,8 +800,8 @@ function geoToPixel(lat, lon) {
 }
 
 function isGeoInsideScene(lat, lon) {
-    const centerLat = getNumericInputValue('validationCenterLat', 62.2005);
-    const centerLon = getNumericInputValue('validationCenterLon', -18.5217);
+    const centerLat = getNumericInputValue('validationCenterLat', 58.7237);
+    const centerLon = getNumericInputValue('validationCenterLon', -20.3087);
     const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 8.0)));
     const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 12.0)));
     return (
@@ -1076,8 +1100,8 @@ async function generateRandomScene() {
 }
 
 function applySuggestedRoute() {
-    document.getElementById('validationCenterLat').value = '62.2005';
-    document.getElementById('validationCenterLon').value = '-18.5217';
+    document.getElementById('validationCenterLat').value = '58.7237';
+    document.getElementById('validationCenterLon').value = '-20.3087';
     document.getElementById('validationSpanLat').value = '8.00';
     document.getElementById('validationSpanLon').value = '12.00';
     document.getElementById('validationStartLat').value = '62.1000';
@@ -1099,8 +1123,8 @@ function applySuggestedRoute() {
 
 function buildValidationConfigPayload() {
     const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
-    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 62.2005);
-    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -18.5217);
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 58.7237);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -20.3087);
     payload.geo_span_lat = getNumericInputValue('validationSpanLat', 8.0);
     payload.geo_span_lon = getNumericInputValue('validationSpanLon', 12.0);
     payload.image_size = [
@@ -1116,6 +1140,9 @@ function clearCloudLayerOnly() {
         if (viewer.entities.contains(entity)) viewer.entities.remove(entity);
     });
     cloudEntities = [];
+    sceneOverlayEntity = null;
+    sceneOverlayStaticUrl = null;
+    activeDynamicOverlayFrames = [];
     cloudAnimStartTime = null;
     cloudBaseCoords = {};
 }
@@ -1143,10 +1170,27 @@ function getSceneCloudInfo(scene) {
     };
 }
 
-function renderSceneFootprint(scene) {
+function getActiveOverlayFrame() {
+    if (!Array.isArray(activeDynamicOverlayFrames) || activeDynamicOverlayFrames.length === 0) {
+        return sceneOverlayStaticUrl;
+    }
+    if (!trajectory || trajectory.length <= 1) {
+        return activeDynamicOverlayFrames[0];
+    }
+    const ratio = Math.max(0, Math.min(1, currentIndex / Math.max(trajectory.length - 1, 1)));
+    const frameIndex = Math.min(
+        activeDynamicOverlayFrames.length - 1,
+        Math.max(0, Math.floor(ratio * (activeDynamicOverlayFrames.length - 1)))
+    );
+    return activeDynamicOverlayFrames[frameIndex];
+}
+
+function renderSceneFootprint(scene, dynamicFrames = null) {
     const config = scene.config || {};
     const fileUrls = scene.file_urls || {};
     const overlayUrl = fileUrls.overlay_image || null;
+    sceneOverlayStaticUrl = overlayUrl ? withCacheBust(overlayUrl) : null;
+    activeDynamicOverlayFrames = Array.isArray(dynamicFrames) ? dynamicFrames.slice() : [];
     const centerLat = Number(config.geo_center_lat || currentCenterLat);
     const centerLon = Number(config.geo_center_lon || currentCenterLon);
     const spanLat = Number(config.geo_span_lat || 2.0);
@@ -1155,14 +1199,14 @@ function renderSceneFootprint(scene) {
     const east = centerLon + spanLon / 2;
     const south = centerLat - spanLat / 2;
     const north = centerLat + spanLat / 2;
-    const material = overlayUrl
+    const material = sceneOverlayStaticUrl
         ? new Cesium.ImageMaterialProperty({
-            image: withCacheBust(overlayUrl),
+            image: new Cesium.CallbackProperty(() => getActiveOverlayFrame(), false),
             transparent: true,
             color: Cesium.Color.WHITE.withAlpha(0.88)
         })
         : Cesium.Color.CYAN.withAlpha(0.04);
-    cloudEntities.push(viewer.entities.add({
+    sceneOverlayEntity = viewer.entities.add({
         name: 'Scene Ash Overlay',
         rectangle: {
             coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
@@ -1171,7 +1215,8 @@ function renderSceneFootprint(scene) {
             outline: true,
             outlineColor: Cesium.Color.CYAN.withAlpha(0.75)
         }
-    }));
+    });
+    cloudEntities.push(sceneOverlayEntity);
 }
 
 function renderVolcanoCenterMarker(lon, lat) {
@@ -1222,12 +1267,21 @@ function updateValidationResultPanel(result) {
     const pathData = result.path_data || {};
     const validationInfo = pathData.validation_info || {};
     const animationExport = result.animation_export || validationInfo.animation_export || {};
+    const previewOnly = !!result.preview_only;
 
-    document.getElementById('validationCaseId').textContent = (result.case && result.case.case_id) || validationInfo.case_id || '--';
+    document.getElementById('validationCaseId').textContent = previewOnly
+        ? '未保存预览'
+        : ((result.case && result.case.case_id) || validationInfo.case_id || '--');
     document.getElementById('validationMethod').textContent = pathData.planning_method || '--';
     document.getElementById('validationFallback').textContent = validationInfo.used_fallback ? `已启用 (${validationInfo.fallback_reason || 'fallback'})` : '未启用';
     document.getElementById('validationScene').textContent = pathData.scene_name || validationInfo.scene_name || '--';
-    document.getElementById('validationFrames').textContent = animationExport.frame_count || (result.animation_manifest && result.animation_manifest.frame_count) || '--';
+    document.getElementById('validationSuccess').textContent = pathData.success ? '成功到达' : '未到达';
+    document.getElementById('validationMaxConc').textContent = Number(pathData.max_concentration || 0).toFixed(4);
+    document.getElementById('validationExposure').textContent = Number(pathData.ash_exposure || 0).toFixed(2);
+    document.getElementById('validationReward').textContent = Number(pathData.total_reward || 0).toFixed(1);
+    document.getElementById('validationFrames').textContent = previewOnly
+        ? '即时播放'
+        : (animationExport.frame_count || (result.animation_manifest && result.animation_manifest.frame_count) || '--');
 
     setValidationLink('validationGifLink', result.animation_gif_url, '打开 GIF 动画');
     setValidationLink('validationJsonLink', result.output_file_url, '打开验证 JSON');
@@ -1245,7 +1299,30 @@ function updateValidationResultPanel(result) {
     card.style.display = 'block';
 }
 
+function buildPlanningRequestPayload() {
+    const startGeo = getValidationPointGeo('start');
+    const targetGeo = getValidationPointGeo('target');
+    return {
+        ...buildValidationConfigPayload(),
+        scene_id: currentSceneId,
+        case_name: document.getElementById('validationSceneName').value.trim() || 'planning_case',
+        start_position: [startGeo.lat, startGeo.lon],
+        target_position: [targetGeo.lat, targetGeo.lon],
+        planning_image_size: [1024, 1024],
+        safety_factor: Number(document.getElementById('validationSafetyFactor').value),
+        dynamic_ash: document.getElementById('validationDynamicAsh').value === 'true',
+        prefer_fallback_planner: true,
+        model_path: document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth',
+        fallback_concentration_limit: getNumericInputValue('validationFallbackLimit', 0.3),
+        max_steps: Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500))),
+        animation_fps: Math.max(1, Math.round(getNumericInputValue('validationFps', 12))),
+        animation_max_frames: Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180))),
+    };
+}
+
 async function runPlanningCase() {
+    checkpointPlaybackState.active = false;
+    checkpointPlaybackState.index = -1;
     if (!currentSceneId) {
         setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
         return;
@@ -1273,23 +1350,14 @@ async function runPlanningCase() {
     runButton.disabled = true;
     saveButton.disabled = true;
     runButton.textContent = '规划中...';
-    setValidationStatus('正在规划航线并生成飞行动画...', 'busy');
+    setValidationStatus('正在快速规划航线，马上会在 3D 地球上直接播放...', 'busy');
 
     try {
-        const payload = buildValidationConfigPayload();
-        payload.scene_id = currentSceneId;
-        payload.case_name = document.getElementById('validationSceneName').value.trim() || 'planning_case';
-        payload.start_position = [startGeo.lat, startGeo.lon];
-        payload.target_position = [targetGeo.lat, targetGeo.lon];
-        payload.planning_image_size = [1024, 1024];
-        payload.safety_factor = Number(document.getElementById('validationSafetyFactor').value);
-        payload.dynamic_ash = document.getElementById('validationDynamicAsh').value === 'true';
-        payload.prefer_fallback_planner = true;
-        payload.model_path = document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth';
-        payload.fallback_concentration_limit = getNumericInputValue('validationFallbackLimit', 0.3);
-        payload.max_steps = Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500)));
-        payload.animation_fps = Math.max(1, Math.round(getNumericInputValue('validationFps', 12)));
-        payload.animation_max_frames = Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)));
+        const payload = buildPlanningRequestPayload();
+        payload.save_case = false;
+        payload.export_json = false;
+        payload.export_plot = false;
+        payload.export_animation = false;
 
         const response = await fetch('/api/cases/run', {
             method: 'POST',
@@ -1311,9 +1379,10 @@ async function runPlanningCase() {
             });
             setTimeout(() => playSimulation(), 900);
         }
-        await refreshCases();
-        saveButton.disabled = !latestPlanningCase;
-        setValidationStatus(result.message || '规划完成，飞机已开始播放，结果可保存和载入。', 'success');
+        latestPlanningRequest = buildPlanningRequestPayload();
+        latestPlanningCase = null;
+        saveButton.disabled = false;
+        setValidationStatus('规划完成，飞机已开始播放。”。', 'success');
     } catch (error) {
         console.error('Planning case failed:', error);
         setValidationStatus(`规划失败：${error.message}`, 'error');
@@ -1324,16 +1393,176 @@ async function runPlanningCase() {
 }
 
 async function saveLatestCase() {
-    if (!latestPlanningCase) {
-        setValidationStatus('当前还没有可保存的规划结果。', 'error');
+    if (!latestPlanningRequest) {
+        setValidationStatus('请先做一次即时规划预览，再决定是否保存。', 'error');
         return;
     }
-    await refreshCases();
-    const select = document.getElementById('caseSelect');
-    if (select && latestPlanningCase.case_id) {
-        select.value = latestPlanningCase.case_id;
+    const saveButton = document.getElementById('saveCaseBtn');
+    const originalText = saveButton.textContent;
+    saveButton.disabled = true;
+    saveButton.textContent = '保存中...';
+    setValidationStatus('正在导出动画、路径图并保存为案例...', 'busy');
+    try {
+        const payload = {
+            ...latestPlanningRequest,
+            save_case: true,
+            export_json: true,
+            export_plot: true,
+            export_animation: true
+        };
+        const response = await fetch('/api/cases/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '保存失败');
+        }
+        updateValidationResultPanel(result);
+        latestPlanningCase = result.case || null;
+        latestPlanningRequest = null;
+        await refreshCases();
+        const select = document.getElementById('caseSelect');
+        if (select && latestPlanningCase && latestPlanningCase.case_id) {
+            select.value = latestPlanningCase.case_id;
+        }
+        setValidationStatus(`当前结果已保存：${latestPlanningCase ? latestPlanningCase.case_id : '完成'}`, 'success');
+    } catch (error) {
+        console.error('Save latest case failed:', error);
+        saveButton.disabled = false;
+        setValidationStatus(`保存失败：${error.message}`, 'error');
+    } finally {
+        saveButton.textContent = originalText;
     }
-    setValidationStatus(`当前结果已保存：${latestPlanningCase.case_id}`, 'success');
+}
+
+function renderCheckpointDemo(result) {
+    latestCheckpointDemoItems = Array.isArray(result.items) ? result.items : [];
+    const card = document.getElementById('checkpointDemoCard');
+    const summary = document.getElementById('checkpointDemoSummary');
+    const list = document.getElementById('checkpointDemoList');
+    const playAllButton = document.getElementById('checkpointDemoPlayAllBtn');
+    list.innerHTML = '';
+    checkpointPlaybackState.active = false;
+    checkpointPlaybackState.index = -1;
+
+    if (!latestCheckpointDemoItems.length) {
+        summary.textContent = '未找到结果';
+        if (playAllButton) playAllButton.disabled = true;
+        card.style.display = 'block';
+        return;
+    }
+
+    summary.textContent = `${latestCheckpointDemoItems.length} 个 checkpoint`;
+    if (playAllButton) playAllButton.disabled = latestCheckpointDemoItems.length < 2;
+    latestCheckpointDemoItems.forEach((item, index) => {
+        const metrics = item.metrics || {};
+        const history = item.history_snapshot || {};
+        const stageStatus = metrics.training_success
+            ? '已学会'
+            : (metrics.demo_mode === 'random_exploration'
+                ? '未学会（随机探索演示）'
+                : '学习中');
+        const randomModeLabelMap = {
+            orbit_left: '左转盘旋',
+            orbit_right: '右转盘旋',
+            snake: '蛇形摆动',
+            drift_left: '左偏失控',
+            drift_right: '右偏失控',
+            late_panic: '后程失控',
+            hesitate: '犹豫抖动',
+            wander: '随机游走'
+        };
+        const randomModeText = metrics.random_mode ? (randomModeLabelMap[metrics.random_mode] || metrics.random_mode) : '';
+        const div = document.createElement('div');
+        div.className = 'checkpoint-demo-item';
+        div.innerHTML = `
+            <strong>${item.label}${item.episode ? ` · episode ${item.episode}` : ''}</strong>
+            <div class="checkpoint-demo-meta">
+                阶段判定: ${stageStatus} | 方式: ${metrics.planning_method || '--'}${metrics.demo_mode === 'random_exploration' ? ' / random' : ''}<br>
+                到达终点: ${metrics.arrival_success ? '是' : '否'} | 训练成功: ${metrics.training_success ? '是' : '否'}<br>
+                最大浓度: ${(metrics.max_concentration ?? 0).toFixed(4)} | 暴露: ${(metrics.ash_exposure ?? 0).toFixed(2)} | 步数: ${metrics.steps_taken ?? '--'}<br>
+                ${history.rewards !== undefined ? `训练奖励: ${Number(history.rewards).toFixed(1)} | ` : ''}${history.losses !== undefined ? `Loss: ${Number(history.losses).toFixed(4)} | ` : ''}${history.success_rates !== undefined ? `成功率: ${Number(history.success_rates).toFixed(1)}%` : ''}${randomModeText ? `<br>失败方式: ${randomModeText}` : ''}${metrics.agent_status ? `<br>状态: ${metrics.agent_status}` : ''}
+            </div>
+            <button class="btn" onclick="loadCheckpointDemoItem(${index})">载入并播放这个阶段</button>
+        `;
+        list.appendChild(div);
+    });
+    card.style.display = 'block';
+}
+
+async function runCheckpointDemo() {
+    if (!currentSceneId) {
+        setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
+        return;
+    }
+    const button = document.getElementById('checkpointDemoBtn');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '加载中...';
+    setValidationStatus('正在对当前场景回放不同 checkpoint 的规划结果...', 'busy');
+    try {
+        const payload = buildPlanningRequestPayload();
+        payload.prefer_fallback_planner = false;
+        payload.max_checkpoints = 9;
+        const response = await fetch('/api/cases/checkpoint-demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || 'checkpoint 演示失败');
+        }
+        renderCheckpointDemo(result);
+        if (result.items && result.items.length > 0) {
+            loadCheckpointDemoItem(result.items.length - 1);
+        }
+        setValidationStatus(result.message || 'checkpoint 演示已加载。', 'success');
+    } catch (error) {
+        console.error('Checkpoint demo failed:', error);
+        setValidationStatus(`checkpoint 演示失败：${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function loadCheckpointDemoItem(index, keepSequence = false) {
+    if (!latestCheckpointDemoItems[index]) return;
+    if (!keepSequence) {
+        checkpointPlaybackState.active = false;
+    }
+    checkpointPlaybackState.index = index;
+    checkpointPlaybackState.preserveOnClear = keepSequence;
+    const item = latestCheckpointDemoItems[index];
+    updateValidationResultPanel({
+        preview_only: true,
+        path_data: item.path_data,
+        animation_export: null,
+        case: null
+    });
+    if (item.path_data) {
+        processData({
+            path_data: item.path_data,
+            cloud_info: item.path_data.cloud_info || null,
+            validation_info: item.path_data.validation_info || null
+        });
+        setTimeout(() => playSimulation(), 900);
+    }
+    setValidationStatus(`已载入 ${item.label} 的规划结果并开始播放。`, 'success');
+}
+
+function playAllCheckpointStages() {
+    if (!latestCheckpointDemoItems.length) {
+        setValidationStatus('请先运行一次 checkpoint 过程演示。', 'error');
+        return;
+    }
+    checkpointPlaybackState.active = true;
+    checkpointPlaybackState.index = 0;
+    loadCheckpointDemoItem(0, true);
+    setValidationStatus('正在按 checkpoint 阶段顺序自动播放整个学习过程。', 'success');
 }
 
 async function refreshCases() {
@@ -1360,6 +1589,8 @@ async function refreshCases() {
 }
 
 async function loadSelectedCase() {
+    checkpointPlaybackState.active = false;
+    checkpointPlaybackState.index = -1;
     const caseId = document.getElementById('caseSelect').value;
     if (!caseId) return;
     try {
@@ -1412,8 +1643,9 @@ async function loadSelectedCase() {
             plot_file_url: item.output_urls && item.output_urls.path_plot
         });
         latestPlanningCase = item;
+        latestPlanningRequest = null;
         const saveButton = document.getElementById('saveCaseBtn');
-        if (saveButton) saveButton.disabled = false;
+        if (saveButton) saveButton.disabled = true;
         if (item.path_data) {
             processData({
                 path_data: item.path_data,
@@ -1515,6 +1747,12 @@ function processData(raw) {
             const endWp = waypoints[waypoints.length - 1];
             const lats = waypoints.map(w => w.latitude);
             const lons = waypoints.map(w => w.longitude);
+            const startGeo = Array.isArray(raw.path_data.start_geo)
+                ? raw.path_data.start_geo
+                : [startWp.latitude, startWp.longitude];
+            const targetGeo = Array.isArray(raw.path_data.target_geo)
+                ? raw.path_data.target_geo
+                : [endWp.latitude, endWp.longitude];
 
             // 优先使用 cloud_info 中的精确云中心坐标，否则退回到路径边界框中点
             if (raw.cloud_info && raw.cloud_info.center_lat !== undefined) {
@@ -1535,11 +1773,17 @@ function processData(raw) {
             console.log('Trajectory created, length:', trajectory.length);
             console.log('Concentration data length:', concentrationAlongPath.length);
 
-            renderCloudFromWaypoints(waypoints, currentCenterLon, currentCenterLat, raw.cloud_info);
-            renderOriginalRoute([startWp.longitude, startWp.latitude], [endWp.longitude, endWp.latitude]);
+            renderCloudFromWaypoints(
+                waypoints,
+                currentCenterLon,
+                currentCenterLat,
+                raw.cloud_info,
+                (raw.path_data && raw.path_data.dynamic_preview_frames) || raw.dynamic_preview_frames || []
+            );
+            renderOriginalRoute([startGeo[1], startGeo[0]], [targetGeo[1], targetGeo[0]]);
             renderPlannedPath(trajectory);
             createAircraft();
-            updateStats();
+            latestRouteStats = updateStats();
             updateDataStatus('loaded', '已加载');
 
             console.log('Loaded planning result without changing camera view');
@@ -1563,7 +1807,7 @@ function processData(raw) {
                 currentCenterLon = data.metadata.center_lon || 120;
                 currentCenterLat = data.metadata.center_lat || 35;
             }
-            updateStats();
+            latestRouteStats = updateStats();
             updateDataStatus('loaded', '已加载');
 
             console.log('Loaded data without changing camera view');
@@ -1574,11 +1818,11 @@ function processData(raw) {
     }, 150);
 }
 
-function renderCloudFromWaypoints(waypoints, centerLon, centerLat, cloudInfo) {
+function renderCloudFromWaypoints(waypoints, centerLon, centerLat, cloudInfo, dynamicFrames = null) {
     console.log('Rendering cloud from waypoints, center:', centerLon, centerLat);
 
     if (currentScene && currentScene.file_urls && currentScene.file_urls.overlay_image) {
-        renderSceneFootprint(currentScene);
+        renderSceneFootprint(currentScene, dynamicFrames);
         const config = currentScene.config || {};
         renderVolcanoCenterMarker(
             Number(config.geo_center_lon || centerLon),
@@ -1622,19 +1866,7 @@ function renderScatterCloud(features, metadata) {
 
 function renderOriginalRoute(start, target) {
     console.log('Rendering original route from', start, 'to', target);
-    originalRouteEntity = viewer.entities.add({
-        name: '直飞参考线',
-        polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights([start[0], start[1], 10000, target[0], target[1], 10000]),
-            width: 2,
-            material: new Cesium.PolylineDashMaterialProperty({
-                color: Cesium.Color.WHITE.withAlpha(0.65),
-                dashLength: 18
-            }),
-            clampToGround: false
-        }
-    });
-    <!-- originalRouteEntity = null; -->
+    originalRouteEntity = null;
 
     routeMarkerEntities.push(viewer.entities.add({
         name: 'Start',
@@ -1658,20 +1890,7 @@ function renderPlannedPath(trajectory) {
         return;
     }
 
-    plannedPathEntity = viewer.entities.add({
-        name: '规划路径',
-        polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights(
-                trajectory.flatMap(point => [point[0], point[1], point[2] || 10000])
-            ),
-            width: 3,
-            material: new Cesium.PolylineGlowMaterialProperty({
-                color: Cesium.Color.LIME.withAlpha(0.78),
-                glowPower: 0.12
-            }),
-            clampToGround: false
-        }
-    });
+    plannedPathEntity = null;
 
     flownTraceEntity = viewer.entities.add({
         name: '已飞轨迹',
@@ -1789,6 +2008,7 @@ function animate() {
         updatePosition(Math.floor(currentIndex));
         updateProgressUI(100);
         document.getElementById('flightProgress').textContent = '100.0%';
+        handleSimulationFinished();
         return;
     }
 
@@ -1798,6 +2018,23 @@ function animate() {
     updateProgressUI(progress);
 
     if (isPlaying) animationId = requestAnimationFrame(() => animate());
+}
+
+function handleSimulationFinished() {
+    if (!checkpointPlaybackState.active) return;
+    const nextIndex = checkpointPlaybackState.index + 1;
+    if (nextIndex >= latestCheckpointDemoItems.length) {
+        checkpointPlaybackState.active = false;
+        checkpointPlaybackState.index = -1;
+        setValidationStatus('全过程阶段播放完成。', 'success');
+        return;
+    }
+    checkpointPlaybackState.index = nextIndex;
+    setTimeout(() => {
+        if (checkpointPlaybackState.active) {
+            loadCheckpointDemoItem(nextIndex, true);
+        }
+    }, checkpointPlaybackState.delayMs);
 }
 
 function updatePosition(index) {
@@ -1850,7 +2087,6 @@ function toggleOriginalRoute(show) {
 
 function togglePlannedPath(show) {
     plannedPathVisible = show;
-    if (plannedPathEntity) plannedPathEntity.show = show;
     if (flownTraceEntity) flownTraceEntity.show = show;
     updatePlannedPathProgress(currentIndex);
 }
@@ -1903,6 +2139,12 @@ function zoomToCloud() {
 function clearAllData() {
     console.log('=== Clearing all data ===');
     pauseSimulation();
+    if (!checkpointPlaybackState.preserveOnClear) {
+        checkpointPlaybackState.active = false;
+        checkpointPlaybackState.index = -1;
+    } else {
+        checkpointPlaybackState.preserveOnClear = false;
+    }
 
     // 清除跟踪模式
     if (viewer.trackedEntity) {
@@ -1986,9 +2228,7 @@ function clearAllData() {
     document.getElementById('speedInfo').textContent = '--';
     document.getElementById('concentrationInfo').textContent = '--';
     document.getElementById('flightProgress').textContent = '--';
-    document.getElementById('statDistance').textContent = '--';
-    document.getElementById('statMaxConc').textContent = '--';
-    document.getElementById('statDeviation').textContent = '--';
+    latestRouteStats = null;
     updateProgressUI(0);
     updateDataStatus('', '未加载');
 
@@ -2064,7 +2304,7 @@ function loadSampleData() {
         renderOriginalRoute([startLon, startLat], [endLon, endLat]);
         renderPlannedPath(trajectory);
         createAircraft();
-        updateStats();
+        latestRouteStats = updateStats();
         updateDataStatus('loaded', '示例数据');
 
         setTimeout(() => {
@@ -2075,7 +2315,7 @@ function loadSampleData() {
 }
 
 function updateStats() {
-    if (!trajectory || trajectory.length < 2) return;
+    if (!trajectory || trajectory.length < 2) return null;
     let dist = 0;
     for (let i = 1; i < trajectory.length; i++) {
         const p1 = trajectory[i - 1], p2 = trajectory[i];
@@ -2090,12 +2330,11 @@ function updateStats() {
 
     let maxConc = 0;
     concentrationAlongPath.forEach(c => { const n = Number(c); if (Number.isFinite(n) && n > maxConc) maxConc = n; });
-
-    document.getElementById('statDistance').textContent = `${dist.toFixed(1)} km`;
-    // 如果浓度非常小，使用科学计数法
-    const maxConcText = maxConc > 0 ? ((maxConc < 0.0001) ? maxConc.toExponential(2) : maxConc.toFixed(4)) : '--';
-    document.getElementById('statMaxConc').textContent = maxConcText;
-    document.getElementById('statDeviation').textContent = `${(dist - directDist).toFixed(1)} km`;
+    return {
+        distanceKm: dist,
+        maxConcentration: maxConc,
+        deviationKm: dist - directDist
+    };
 }
 
 function updateDataStatus(status, text) {
@@ -2113,8 +2352,8 @@ async function loadValidationDefaults() {
         validationBaseConfig = config;
 
         document.getElementById('validationSceneName').value = '冰岛火山灰测试';
-        document.getElementById('validationCenterLat').value = '62.2005';
-        document.getElementById('validationCenterLon').value = '-18.5217';
+        document.getElementById('validationCenterLat').value = '58.7237';
+        document.getElementById('validationCenterLon').value = '-20.3087';
         document.getElementById('validationSpanLat').value = '8.00';
         document.getElementById('validationSpanLon').value = '12.00';
         if (Array.isArray(config.image_size) && config.image_size.length >= 2) {

@@ -4,6 +4,8 @@ from datetime import datetime
 import os
 os.environ.setdefault('MPLBACKEND', 'Agg')
 import json
+import re
+import base64
 import cv2
 import numpy as np
 from urllib.parse import quote
@@ -239,6 +241,648 @@ def build_agent_for_config(config, model_path=None, allow_missing_model=False):
         agent.load_model(model_path)
 
     return agent
+
+
+def _checkpoint_episode_number(path: str) -> int:
+    match = re.search(r'checkpoint_ep(\d+)\.pth$', os.path.basename(path))
+    return int(match.group(1)) if match else -1
+
+
+def _resolve_checkpoint_selection(model_path: str, max_checkpoints: int = 5):
+    if not model_path:
+        return []
+
+    if os.path.isdir(model_path):
+        model_dir = model_path
+        final_path = os.path.join(model_dir, 'final_model.pth')
+    else:
+        model_dir = os.path.dirname(model_path) or '.'
+        final_path = model_path if os.path.basename(model_path) == 'final_model.pth' else os.path.join(model_dir, 'final_model.pth')
+
+    checkpoint_paths = sorted(
+        [
+            os.path.join(model_dir, name)
+            for name in os.listdir(model_dir)
+            if re.match(r'checkpoint_ep\d+\.pth$', name)
+        ] if os.path.isdir(model_dir) else [],
+        key=_checkpoint_episode_number
+    )
+
+    selected = []
+    if checkpoint_paths:
+        take = min(max(1, int(max_checkpoints)), len(checkpoint_paths))
+        indices = np.linspace(0, len(checkpoint_paths) - 1, take, dtype=int)
+        seen = set()
+        for index in indices.tolist():
+            path = checkpoint_paths[index]
+            if path in seen:
+                continue
+            seen.add(path)
+            selected.append({
+                'label': f'ep{_checkpoint_episode_number(path):04d}',
+                'episode': _checkpoint_episode_number(path),
+                'path': path,
+            })
+
+    if os.path.exists(final_path):
+        selected.append({
+            'label': 'final',
+            'episode': None,
+            'path': final_path,
+        })
+
+    deduped = []
+    seen_paths = set()
+    for item in selected:
+        if item['path'] in seen_paths:
+            continue
+        seen_paths.add(item['path'])
+        deduped.append(item)
+    return deduped
+
+
+def _load_model_history(model_path: str):
+    if not model_path:
+        return None
+    model_dir = model_path if os.path.isdir(model_path) else (os.path.dirname(model_path) or '.')
+    history_path = os.path.join(model_dir, 'training_history.json')
+    if not os.path.exists(history_path):
+        return None
+    with open(history_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _history_snapshot_for_episode(history, episode):
+    if not history or episode is None:
+        return None
+    episodes = history.get('episodes') or []
+    if not episodes:
+        return None
+    try:
+        best_index = min(range(len(episodes)), key=lambda idx: abs(int(episodes[idx]) - int(episode)))
+    except Exception:
+        return None
+
+    snapshot = {'episode': int(episodes[best_index])}
+    for key in [
+        'rewards',
+        'losses',
+        'actor_losses',
+        'critic_losses',
+        'success_rates',
+        'ash_exposures',
+        'cross_track_errors',
+        'final_distances',
+        'safety_factors',
+    ]:
+        values = history.get(key) or []
+        if best_index < len(values):
+            snapshot[key] = values[best_index]
+    return snapshot
+
+
+class _RandomActionAgent:
+    def __init__(self, seed: int = 0, mode: str = 'wander'):
+        self.rng = np.random.default_rng(seed)
+        self.mode = mode
+        self.step = 0
+
+    def select_action(self, _state, evaluate=True):
+        self.step += 1
+        if self.mode == 'orbit_left':
+            action = 0.85
+        elif self.mode == 'orbit_right':
+            action = -0.85
+        elif self.mode == 'snake':
+            action = 0.95 * np.sin(self.step / 5.0)
+        elif self.mode == 'drift_left':
+            action = 0.35 if self.step < 18 else 0.95
+        elif self.mode == 'drift_right':
+            action = -0.35 if self.step < 18 else -0.95
+        elif self.mode == 'late_panic':
+            action = 0.0 if self.step < 24 else (0.95 if (self.step // 8) % 2 == 0 else -0.95)
+        elif self.mode == 'hesitate':
+            action = 0.18 * np.sin(self.step / 2.0) + self.rng.normal(0.0, 0.08)
+        else:
+            action = self.rng.uniform(-1.0, 1.0)
+        return np.array([float(np.clip(action, -1.0, 1.0))], dtype=np.float32)
+
+
+def _run_random_policy_preview(planner,
+                               config,
+                               concentration_map,
+                               start_pixel,
+                               target_pixel,
+                               start_geo,
+                               target_geo,
+                               scene_name,
+                               max_steps: int,
+                               reason: str,
+                               mode: str = 'wander'):
+    random_seed = int(abs(hash((scene_name, tuple(start_pixel), tuple(target_pixel), reason))) % (2**31 - 1))
+    planner.set_agent(_RandomActionAgent(seed=random_seed, mode=mode))
+    random_result = planner.plan_path(tuple(start_pixel), tuple(target_pixel), max_steps=max_steps)
+    random_result['start_geo'] = list(start_geo)
+    random_result['target_geo'] = list(target_geo)
+    random_result['start_pixel'] = list(start_pixel)
+    random_result['target_pixel'] = list(target_pixel)
+    random_result['scene_name'] = scene_name
+    random_result['planning_method'] = 'random_policy'
+    random_result['success'] = False
+    random_result['cloud_info'] = random_result.get('cloud_info') or planner.build_cloud_info()
+    random_result['validation_info'] = {
+        'used_fallback': False,
+        'demo_mode': 'random_exploration',
+        'fallback_reason': '',
+        'agent_status': reason,
+        'random_mode': mode,
+        'scene_id': None,
+        'case_id': None
+    }
+    return random_result
+
+
+def _encode_dynamic_preview_frames(dynamic_maps,
+                                   threshold: float,
+                                   max_frames: int = 36,
+                                   target_size=(256, 256)):
+    if not dynamic_maps:
+        return []
+    take = min(max_frames, len(dynamic_maps))
+    indices = np.linspace(0, len(dynamic_maps) - 1, take, dtype=int)
+    frames = []
+    for index in indices.tolist():
+        map_array = np.asarray(dynamic_maps[index], dtype=np.float32)
+        if map_array.dtype == np.uint8:
+            map_array = map_array / 255.0
+        map_array = np.clip(map_array, 0.0, 1.0)
+        rgba = np.zeros((map_array.shape[0], map_array.shape[1], 4), dtype=np.uint8)
+        safe = (map_array >= threshold * 0.15) & (map_array < threshold * 0.5)
+        low = (map_array >= threshold * 0.5) & (map_array < threshold)
+        medium = (map_array >= threshold) & (map_array < threshold * 1.5)
+        high = map_array >= threshold * 1.5
+        rgba[safe] = [0, 255, 0, 82]
+        rgba[low] = [255, 255, 0, 118]
+        rgba[medium] = [255, 165, 0, 152]
+        rgba[high] = [255, 0, 0, 190]
+        rgba[:, :, 3] = np.maximum(rgba[:, :, 3], np.clip(map_array * 170, 0, 190).astype(np.uint8))
+        if target_size:
+            rgba = cv2.resize(rgba, target_size, interpolation=cv2.INTER_LINEAR)
+        success, encoded = cv2.imencode('.png', cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA))
+        if not success:
+            continue
+        frames.append(f"data:image/png;base64,{base64.b64encode(encoded.tobytes()).decode('ascii')}")
+    return frames
+
+
+def _cloud_center_pixel(concentration_map: np.ndarray):
+    weights = np.clip(np.asarray(concentration_map, dtype=np.float32), 0.0, 1.0)
+    if float(np.sum(weights)) <= 1e-6:
+        h, w = weights.shape[:2]
+        return np.array([h / 2.0, w / 2.0], dtype=np.float32)
+    ys, xs = np.indices(weights.shape, dtype=np.float32)
+    total = float(np.sum(weights))
+    cy = float(np.sum(ys * weights) / total)
+    cx = float(np.sum(xs * weights) / total)
+    return np.array([cy, cx], dtype=np.float32)
+
+
+def _cloud_hotspot_pixel(concentration_map: np.ndarray):
+    weights = np.asarray(concentration_map, dtype=np.float32)
+    if weights.size == 0:
+        return np.array([0.0, 0.0], dtype=np.float32)
+    flat_index = int(np.argmax(weights))
+    y, x = np.unravel_index(flat_index, weights.shape)
+    return np.array([float(y), float(x)], dtype=np.float32)
+
+
+def _clip_pixel_path(points, image_size):
+    h, w = image_size
+    clipped = []
+    for point in points:
+        clipped.append((
+            float(np.clip(point[0], 0, h - 1)),
+            float(np.clip(point[1], 0, w - 1)),
+        ))
+    return clipped
+
+
+def _build_demo_failure_pixel_path(concentration_map,
+                                   config,
+                                   start_pixel,
+                                   target_pixel,
+                                   mode: str,
+                                   desired_points: int = 160):
+    start = np.array(start_pixel, dtype=np.float32)
+    target = np.array(target_pixel, dtype=np.float32)
+    cloud = _cloud_center_pixel(concentration_map)
+    hotspot = _cloud_hotspot_pixel(concentration_map)
+    base = target - start
+    dist = float(np.linalg.norm(base))
+    if dist < 1e-6:
+        dist = 1.0
+        direction = np.array([0.0, 1.0], dtype=np.float32)
+    else:
+        direction = base / dist
+    perp = np.array([-direction[1], direction[0]], dtype=np.float32)
+
+    to_cloud = hotspot - start
+    proj_len = float(np.dot(to_cloud, direction))
+    proj_point = start + direction * np.clip(proj_len, dist * 0.22, dist * 0.78)
+    danger_anchor = proj_point * 0.18 + cloud * 0.22 + hotspot * 0.60
+    orbit_radius = max(dist * 0.08, min(config.image_size) * 0.05)
+    amplitude = max(dist * 0.12, min(config.image_size) * 0.08)
+
+    points = []
+    for i in range(desired_points):
+        t = i / max(desired_points - 1, 1)
+        if mode == 'orbit_left':
+            if t < 0.34:
+                point = start + (danger_anchor - start) * (t / 0.34)
+            else:
+                angle = 2.8 * np.pi * ((t - 0.34) / 0.66) + np.pi * 0.3
+                center = danger_anchor + perp * amplitude * 0.10
+                point = center + orbit_radius * 0.82 * (np.cos(angle) * direction + np.sin(angle) * perp)
+        elif mode == 'orbit_right':
+            if t < 0.34:
+                point = start + (danger_anchor - start) * (t / 0.34)
+            else:
+                angle = -2.8 * np.pi * ((t - 0.34) / 0.66) + np.pi * 0.2
+                center = danger_anchor - perp * amplitude * 0.10
+                point = center + orbit_radius * 0.82 * (np.cos(angle) * direction + np.sin(angle) * perp)
+        elif mode == 'snake':
+            point = start + (danger_anchor - start) * min(t * 1.08, 1.0)
+            point = point + perp * (np.sin(t * 5.2 * np.pi) * amplitude * (0.9 - 0.20 * t))
+        elif mode == 'drift_left':
+            if t < 0.52:
+                point = start + (danger_anchor - start) * (t / 0.52)
+            else:
+                drift_t = (t - 0.52) / 0.48
+                point = danger_anchor + direction * drift_t * amplitude * 0.18
+                point = point + perp * (0.12 + 0.82 * drift_t) * amplitude
+        elif mode == 'drift_right':
+            if t < 0.52:
+                point = start + (danger_anchor - start) * (t / 0.52)
+            else:
+                drift_t = (t - 0.52) / 0.48
+                point = danger_anchor + direction * drift_t * amplitude * 0.18
+                point = point - perp * (0.12 + 0.82 * drift_t) * amplitude
+        elif mode == 'late_panic':
+            if t < 0.45:
+                point = start + (danger_anchor - start) * (t / 0.45)
+            else:
+                panic_t = (t - 0.45) / 0.55
+                point = danger_anchor + direction * (panic_t * amplitude * 0.4) + perp * np.sin(panic_t * 2.6 * np.pi) * amplitude * 1.35
+        elif mode == 'hesitate':
+            point = start + (danger_anchor - start) * min(t * 0.96, 0.96)
+            point = point + perp * np.sin(t * 9.0 * np.pi) * amplitude * 0.42
+            point = point - direction * np.sin(t * 4.0 * np.pi) * amplitude * 0.18
+        else:  # wander
+            point = start + (danger_anchor - start) * min(t * 1.02, 1.0)
+            point = point + perp * np.sin(t * 7.0 * np.pi) * amplitude * 0.55
+            point = point + direction * np.sin(t * 3.0 * np.pi) * amplitude * 0.18
+        points.append((float(point[0]), float(point[1])))
+    return _clip_pixel_path(points, config.image_size)
+
+
+def _execute_case_planning(data,
+                           *,
+                           save_case: bool = True,
+                           export_json: bool = None,
+                           export_plot: bool = None,
+                           export_animation: bool = None,
+                           allow_fallback: bool = True,
+                           random_on_missing_agent: bool = False,
+                           random_demo_mode: str = None,
+                           synthetic_failure_mode: str = None,
+                           model_override: str = None,
+                           case_name_override: str = None):
+    from src.config.volcanic_ash_config import VolcanicAshConfig
+    from src.path_planning.animation_exporter import ValidationAnimationExporter
+    from src.path_planning.fallback_planner import FallbackPlanner
+    from src.path_planning.planner import PathPlanner
+    from src.web.case_manager import WebCaseManager
+
+    manager = WebCaseManager(OUTPUT_DIR)
+    scene_id = str(data.get('scene_id') or '')
+    if not scene_id:
+        raise ValueError('scene_id is required')
+    scene = manager.load_scene(scene_id)
+    scene_concentration_map = manager.load_scene_map(scene)
+    scene_config = VolcanicAshConfig.from_dict(scene.get('config', {}))
+    requested_scene_config = _apply_conversion_request_config(
+        VolcanicAshConfig.from_dict(scene_config.to_dict()),
+        data
+    )
+    config = _apply_planning_options(VolcanicAshConfig.from_dict(requested_scene_config.to_dict()), data)
+
+    scene_name = str(case_name_override or data.get('case_name') or scene.get('scene_name') or 'planning_case')
+    model_path = model_override or data.get('model_path', 'models/final_model.pth')
+    if export_json is None:
+        export_json = save_case
+    if export_plot is None:
+        export_plot = save_case
+    if export_animation is None:
+        export_animation = save_case
+
+    needs_output_dir = save_case or export_json or export_plot or export_animation
+    case_id = None
+    case_dir = None
+    copied_scene_files = {}
+    if needs_output_dir:
+        case_meta = manager.create_case_dir(scene_name)
+        case_id = case_meta['case_id']
+        case_dir = case_meta['case_dir']
+        copied_scene_files = manager.copy_scene_files_to_case(scene, case_dir)
+
+    start_pixel = _parse_pixel_pair(data, 'start_pixel', 'start_pixel_x', 'start_pixel_y')
+    target_pixel = _parse_pixel_pair(data, 'target_pixel', 'target_pixel_x', 'target_pixel_y')
+    default_start = (31.1443, 121.8083)
+    default_target = (35.5494, 139.7798)
+    start_geo = _parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start)
+    target_geo = _parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target)
+
+    if start_pixel is None or target_pixel is None:
+        requested_size = _parse_size_pair(data.get('planning_image_size'), (1024, 1024))
+        config = _expand_planning_config_for_route(config, start_geo, target_geo, requested_size)
+        concentration_map = _embed_scene_map_in_planning_map(
+            scene_concentration_map,
+            requested_scene_config,
+            config
+        )
+    else:
+        concentration_map = scene_concentration_map
+
+    prefer_fallback = _parse_bool(data.get('prefer_fallback_planner'), default=False)
+    agent = None
+    fallback_reason = ''
+    if not prefer_fallback:
+        try:
+            agent = build_agent_for_config(
+                config,
+                model_path=model_path,
+                allow_missing_model=True
+            )
+        except Exception as exc:
+            fallback_reason = f'agent_load_error:{exc}'
+    planner = PathPlanner(config, agent)
+    planner.set_external_concentration_map(concentration_map, scene_name=scene_name)
+
+    if start_pixel is None or target_pixel is None:
+        start_pixel, target_pixel = planner.convert_geo_input(start_geo, target_geo)
+    else:
+        x0, y0 = start_pixel
+        x1, y1 = target_pixel
+        h, w = tuple(config.image_size)
+        start_pixel = (int(np.clip(round(y0), 0, h - 1)), int(np.clip(round(x0), 0, w - 1)))
+        target_pixel = (int(np.clip(round(y1), 0, h - 1)), int(np.clip(round(x1), 0, w - 1)))
+        start_geo = planner.ash_model.pixel_to_geo(start_pixel[1], start_pixel[0])
+        target_geo = planner.ash_model.pixel_to_geo(target_pixel[1], target_pixel[0])
+
+    max_steps = _parse_int(data.get('max_steps'), 500)
+    fallback_limit = _parse_float(data.get('fallback_concentration_limit'), config.concentration_threshold)
+    effective_fallback_limit, effective_risk_radius, fallback_cost_safety_factor = _safety_adjusted_planning_limits(
+        config,
+        fallback_limit
+    )
+    setattr(config, 'fallback_cost_safety_factor', fallback_cost_safety_factor)
+    used_fallback = False
+    rl_result = None
+    if agent is not None and not prefer_fallback:
+        try:
+            rl_result = planner.plan_path(tuple(start_pixel), tuple(target_pixel), max_steps=max_steps)
+            rl_result['start_geo'] = list(start_geo)
+            rl_result['target_geo'] = list(target_geo)
+            rl_result['start_pixel'] = list(start_pixel)
+            rl_result['target_pixel'] = list(target_pixel)
+            rl_result['cloud_info'] = rl_result.get('cloud_info') or planner.build_cloud_info()
+        except Exception as exc:
+            fallback_reason = f'rl_error:{exc}'
+
+    if prefer_fallback and allow_fallback:
+        used_fallback = True
+        fallback_reason = 'safety_aware_web_planner'
+    elif rl_result is None and allow_fallback:
+        used_fallback = True
+        fallback_reason = fallback_reason or 'rl_agent_unavailable'
+    elif allow_fallback and (not rl_result.get('success', False) or rl_result.get('max_concentration', 1.0) > effective_fallback_limit):
+        used_fallback = True
+        fallback_reason = 'rl_path_rejected'
+
+    if used_fallback:
+        fallback_points = FallbackPlanner(config).plan(
+            concentration_map,
+            tuple(start_pixel),
+            tuple(target_pixel),
+            max_concentration=effective_fallback_limit,
+            risk_inflation_radius=effective_risk_radius,
+            desired_points=160
+        )
+        path_result = planner.build_path_data_from_pixel_path(
+            fallback_points,
+            planning_method='fallback',
+            start_geo=start_geo,
+            target_geo=target_geo,
+            start_pixel=start_pixel,
+            target_pixel=target_pixel
+        )
+        path_result['validation_info'] = {
+            'used_fallback': True,
+            'fallback_reason': fallback_reason,
+            'fallback_limit': fallback_limit,
+            'effective_fallback_limit': effective_fallback_limit,
+            'effective_risk_inflation_radius': effective_risk_radius,
+            'fallback_cost_safety_factor': fallback_cost_safety_factor,
+            'fallback_summary': FallbackPlanner(config).summarize_path(concentration_map, fallback_points),
+            'scene_id': scene_id,
+            'case_id': case_id
+        }
+        if rl_result is not None:
+            path_result['validation_info']['rl_attempt'] = {
+                'success': rl_result.get('success', False),
+                'max_concentration': rl_result.get('max_concentration', 0.0),
+                'steps_taken': rl_result.get('steps_taken', 0)
+            }
+    elif synthetic_failure_mode:
+        demo_points = _build_demo_failure_pixel_path(
+            concentration_map,
+            config,
+            start_pixel,
+            target_pixel,
+            synthetic_failure_mode,
+            desired_points=min(max_steps, 180)
+        )
+        path_result = planner.build_path_data_from_pixel_path(
+            demo_points,
+            planning_method='demo_failure',
+            start_geo=start_geo,
+            target_geo=target_geo,
+            start_pixel=start_pixel,
+            target_pixel=target_pixel
+        )
+        path_result['success'] = False
+        path_result['validation_info'] = {
+            'used_fallback': False,
+            'demo_mode': 'synthetic_failure',
+            'random_mode': synthetic_failure_mode,
+            'fallback_reason': '',
+            'agent_status': fallback_reason or 'low_success_checkpoint_demo',
+            'fallback_limit': fallback_limit,
+            'effective_fallback_limit': effective_fallback_limit,
+            'effective_risk_inflation_radius': effective_risk_radius,
+            'fallback_cost_safety_factor': fallback_cost_safety_factor,
+            'scene_id': scene_id,
+            'case_id': case_id
+        }
+    elif rl_result is None and random_on_missing_agent:
+        path_result = _run_random_policy_preview(
+            planner,
+            config,
+            concentration_map,
+            start_pixel,
+            target_pixel,
+            start_geo,
+            target_geo,
+            scene_name,
+            max_steps,
+            fallback_reason or 'rl_agent_unavailable',
+            mode=random_demo_mode or 'wander'
+        )
+        path_result['validation_info'].update({
+            'fallback_limit': fallback_limit,
+            'effective_fallback_limit': effective_fallback_limit,
+            'effective_risk_inflation_radius': effective_risk_radius,
+            'fallback_cost_safety_factor': fallback_cost_safety_factor,
+            'scene_id': scene_id,
+            'case_id': case_id
+        })
+    else:
+        path_result = rl_result
+        path_result['validation_info'] = path_result.get('validation_info') or {
+            'used_fallback': False,
+            'fallback_reason': '',
+            'fallback_limit': fallback_limit,
+            'effective_fallback_limit': effective_fallback_limit,
+            'effective_risk_inflation_radius': effective_risk_radius,
+            'fallback_cost_safety_factor': fallback_cost_safety_factor,
+            'scene_id': scene_id,
+            'case_id': case_id
+        }
+
+    path_result['scene_name'] = scene_name
+    path_result['cloud_info'] = path_result.get('cloud_info') or planner.build_cloud_info()
+    json_ready_result = dict(path_result)
+    dynamic_maps = json_ready_result.pop('concentration_maps', None)
+    if dynamic_maps is None and bool(getattr(config, 'enable_dynamic_ash', False)) and export_animation:
+        dynamic_maps = _generate_dynamic_maps_for_waypoints(
+            config,
+            concentration_map,
+            len(json_ready_result.get('waypoints', []))
+        )
+    dynamic_preview_frames = []
+    if bool(getattr(config, 'enable_dynamic_ash', False)):
+        if dynamic_maps is None:
+            dynamic_maps = _generate_dynamic_maps_for_waypoints(
+                config,
+                concentration_map,
+                len(json_ready_result.get('waypoints', []))
+            )
+        dynamic_preview_frames = _encode_dynamic_preview_frames(
+            dynamic_maps,
+            float(config.concentration_threshold),
+            max_frames=32,
+            target_size=(320, 320)
+        ) if dynamic_maps is not None else []
+        if dynamic_preview_frames:
+            json_ready_result['dynamic_preview_frames'] = dynamic_preview_frames
+
+    output_json = None
+    output_plot = None
+    animation_export = {}
+    if export_json and case_dir:
+        output_json = os.path.join(case_dir, 'planned_path.json')
+        planner.export_path_json(json_ready_result, output_json)
+    if export_plot and case_dir:
+        output_plot = os.path.join(case_dir, 'path_plot.png')
+        planner.visualize_path(json_ready_result, save_path=output_plot)
+    if export_animation and case_dir:
+        animation_dir = os.path.join(case_dir, 'animation')
+        animation_gif = os.path.join(animation_dir, 'flight_animation.gif')
+        animation_result = dict(path_result)
+        if dynamic_maps is not None:
+            animation_result['concentration_maps'] = dynamic_maps
+        animation_export = ValidationAnimationExporter(config, concentration_map).export(
+            animation_result,
+            output_dir=animation_dir,
+            gif_path=animation_gif,
+            video_path=None,
+            fps=_parse_int(data.get('animation_fps'), 12),
+            max_frames=_parse_int(data.get('animation_max_frames'), 180),
+            save_frames=_parse_bool(data.get('animation_save_frames'), False)
+        ) or {}
+        if isinstance(animation_export, dict):
+            animation_export.pop('video_path', None)
+            animation_export.pop('video_codec', None)
+    if animation_export:
+        json_ready_result.setdefault('validation_info', {})['animation_export'] = animation_export
+
+    case_payload = None
+    if save_case and case_dir and case_id:
+        outputs = {
+            'planned_path': output_json,
+            'path_plot': output_plot,
+            'animation_gif': animation_export.get('gif_path'),
+            'case_manifest': os.path.join(case_dir, 'case.json')
+        }
+        manifest = {
+            'case_id': case_id,
+            'case_name': scene_name,
+            'created_at': datetime.now().isoformat(timespec='seconds'),
+            'scene_id': scene_id,
+            'scene_name': scene.get('scene_name'),
+            'scene_files': copied_scene_files,
+            'map': {
+                'image_size': list(config.image_size),
+                'geo_center_lat': config.geo_center_lat,
+                'geo_center_lon': config.geo_center_lon,
+                'geo_span_lat': config.geo_span_lat,
+                'geo_span_lon': config.geo_span_lon
+            },
+            'flight': {
+                'start_pixel': [int(start_pixel[1]), int(start_pixel[0])],
+                'target_pixel': [int(target_pixel[1]), int(target_pixel[0])],
+                'start_geo': list(start_geo),
+                'target_geo': list(target_geo)
+            },
+            'planning': {
+                'model_path': model_path,
+                'safety_factor': float(config.fixed_safety_factor),
+                'dynamic_ash': bool(config.enable_dynamic_ash),
+                'max_steps': max_steps,
+                'fallback_concentration_limit': fallback_limit,
+                'effective_fallback_concentration_limit': effective_fallback_limit,
+                'effective_risk_inflation_radius': effective_risk_radius,
+                'fallback_cost_safety_factor': fallback_cost_safety_factor,
+                'planning_method': json_ready_result.get('planning_method')
+            },
+            'outputs': outputs,
+            'path_data': json_ready_result
+        }
+        manager.save_case(case_id, manifest)
+        case_payload = _attach_file_urls(manifest)
+
+    return _to_jsonable({
+        'success': True,
+        'preview_only': not save_case,
+        'case': case_payload,
+        'path_data': json_ready_result,
+        'dynamic_preview_frames': dynamic_preview_frames or None,
+        'animation_export': animation_export or None,
+        'output_file_url': _build_output_url(output_json) if output_json else None,
+        'plot_file_url': _build_output_url(output_plot) if output_plot else None,
+        'animation_gif_url': _build_output_url(animation_export.get('gif_path')) if animation_export.get('gif_path') else None,
+        'message': '规划完成并已保存为案例' if save_case else '规划完成，已返回即时预览结果'
+    })
 
 def _apply_conversion_request_config(config, payload):
     config.image_size = _parse_size_pair(
@@ -844,239 +1488,85 @@ def get_scene(scene_id):
 def run_case():
     data = request.get_json(silent=True) or {}
 
-    from src.config.volcanic_ash_config import VolcanicAshConfig
-    from src.path_planning.animation_exporter import ValidationAnimationExporter
-    from src.path_planning.fallback_planner import FallbackPlanner
-    from src.path_planning.planner import PathPlanner
-    from src.web.case_manager import WebCaseManager
+    try:
+        save_case = _parse_bool(data.get('save_case'), True)
+        export_json = _parse_bool(data.get('export_json'), save_case)
+        export_plot = _parse_bool(data.get('export_plot'), save_case)
+        export_animation = _parse_bool(data.get('export_animation'), save_case)
+        return jsonify(_execute_case_planning(
+            data,
+            save_case=save_case,
+            export_json=export_json,
+            export_plot=export_plot,
+            export_animation=export_animation,
+        ))
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cases/checkpoint-demo', methods=['POST'])
+def checkpoint_demo():
+    data = request.get_json(silent=True) or {}
 
     try:
-        manager = WebCaseManager(OUTPUT_DIR)
-        scene_id = str(data.get('scene_id') or '')
-        if not scene_id:
-            raise ValueError('scene_id is required')
-        scene = manager.load_scene(scene_id)
-        scene_concentration_map = manager.load_scene_map(scene)
-        scene_config = VolcanicAshConfig.from_dict(scene.get('config', {}))
-        requested_scene_config = _apply_conversion_request_config(
-            VolcanicAshConfig.from_dict(scene_config.to_dict()),
-            data
-        )
-        config = _apply_planning_options(VolcanicAshConfig.from_dict(requested_scene_config.to_dict()), data)
+        model_path = str(data.get('model_path') or 'models/final_model.pth')
+        max_checkpoints = max(2, _parse_int(data.get('max_checkpoints'), 5))
+        selection = _resolve_checkpoint_selection(model_path, max_checkpoints=max_checkpoints)
+        if not selection:
+            raise FileNotFoundError('未找到 checkpoint_ep*.pth 或 final_model.pth')
 
-        scene_name = str(data.get('case_name') or scene.get('scene_name') or 'planning_case')
-        case_meta = manager.create_case_dir(scene_name)
-        case_id = case_meta['case_id']
-        case_dir = case_meta['case_dir']
-        copied_scene_files = manager.copy_scene_files_to_case(scene, case_dir)
-
-        start_pixel = _parse_pixel_pair(data, 'start_pixel', 'start_pixel_x', 'start_pixel_y')
-        target_pixel = _parse_pixel_pair(data, 'target_pixel', 'target_pixel_x', 'target_pixel_y')
-        default_start = (
-            31.1443,
-            121.8083
-        )
-        default_target = (
-            35.5494,
-            139.7798
-        )
-        start_geo = _parse_geo_pair(data, 'start_position', 'start_lat', 'start_lon', default_start)
-        target_geo = _parse_geo_pair(data, 'target_position', 'target_lat', 'target_lon', default_target)
-
-        if start_pixel is None or target_pixel is None:
-            requested_size = _parse_size_pair(data.get('planning_image_size'), (1024, 1024))
-            config = _expand_planning_config_for_route(config, start_geo, target_geo, requested_size)
-            concentration_map = _embed_scene_map_in_planning_map(
-                scene_concentration_map,
-                requested_scene_config,
-                config
+        history = _load_model_history(model_path)
+        items = []
+        for item in selection:
+            history_snapshot = _history_snapshot_for_episode(history, item['episode'])
+            checkpoint_success_rate = None
+            if history_snapshot and history_snapshot.get('success_rates') is not None:
+                checkpoint_success_rate = float(history_snapshot.get('success_rates'))
+            planning_result = _execute_case_planning(
+                data,
+                save_case=False,
+                export_json=False,
+                export_plot=False,
+                export_animation=False,
+                allow_fallback=False,
+                random_on_missing_agent=True,
+                model_override=item['path'],
+                case_name_override=f"{data.get('case_name') or 'checkpoint_demo'}_{item['label']}",
             )
-        else:
-            concentration_map = scene_concentration_map
-
-        prefer_fallback = _parse_bool(data.get('prefer_fallback_planner'), default=False)
-        agent = None if prefer_fallback else build_agent_for_config(
-            config,
-            model_path=data.get('model_path', 'models/final_model.pth'),
-            allow_missing_model=True
-        )
-        planner = PathPlanner(config, agent)
-        planner.set_external_concentration_map(concentration_map, scene_name=scene_name)
-
-        if start_pixel is None or target_pixel is None:
-            start_pixel, target_pixel = planner.convert_geo_input(start_geo, target_geo)
-        else:
-            x0, y0 = start_pixel
-            x1, y1 = target_pixel
-            h, w = tuple(config.image_size)
-            start_pixel = (int(np.clip(round(y0), 0, h - 1)), int(np.clip(round(x0), 0, w - 1)))
-            target_pixel = (int(np.clip(round(y1), 0, h - 1)), int(np.clip(round(x1), 0, w - 1)))
-            start_geo = planner.ash_model.pixel_to_geo(start_pixel[1], start_pixel[0])
-            target_geo = planner.ash_model.pixel_to_geo(target_pixel[1], target_pixel[0])
-
-        max_steps = _parse_int(data.get('max_steps'), 500)
-        fallback_limit = _parse_float(data.get('fallback_concentration_limit'), config.concentration_threshold)
-        effective_fallback_limit, effective_risk_radius, fallback_cost_safety_factor = _safety_adjusted_planning_limits(
-            config,
-            fallback_limit
-        )
-        setattr(config, 'fallback_cost_safety_factor', fallback_cost_safety_factor)
-        used_fallback = False
-        fallback_reason = ''
-        rl_result = None
-        if agent is not None and not prefer_fallback:
-            try:
-                rl_result = planner.plan_path(tuple(start_pixel), tuple(target_pixel), max_steps=max_steps)
-                rl_result['start_geo'] = list(start_geo)
-                rl_result['target_geo'] = list(target_geo)
-                rl_result['start_pixel'] = list(start_pixel)
-                rl_result['target_pixel'] = list(target_pixel)
-                rl_result['cloud_info'] = rl_result.get('cloud_info') or planner.build_cloud_info()
-            except Exception as exc:
-                fallback_reason = f'rl_error:{exc}'
-
-        if prefer_fallback:
-            used_fallback = True
-            fallback_reason = 'safety_aware_web_planner'
-        elif rl_result is None:
-            used_fallback = True
-            fallback_reason = fallback_reason or 'rl_agent_unavailable'
-        elif (not rl_result.get('success', False) or rl_result.get('max_concentration', 1.0) > effective_fallback_limit):
-            used_fallback = True
-            fallback_reason = 'rl_path_rejected'
-
-        if used_fallback:
-            fallback_points = FallbackPlanner(config).plan(
-                concentration_map,
-                tuple(start_pixel),
-                tuple(target_pixel),
-                max_concentration=effective_fallback_limit,
-                risk_inflation_radius=effective_risk_radius,
-                desired_points=160
-            )
-            path_result = planner.build_path_data_from_pixel_path(
-                fallback_points,
-                planning_method='fallback',
-                start_geo=start_geo,
-                target_geo=target_geo,
-                start_pixel=start_pixel,
-                target_pixel=target_pixel
-            )
-            path_result['validation_info'] = {
-                'used_fallback': True,
-                'fallback_reason': fallback_reason,
-                'fallback_limit': fallback_limit,
-                'effective_fallback_limit': effective_fallback_limit,
-                'effective_risk_inflation_radius': effective_risk_radius,
-                'fallback_cost_safety_factor': fallback_cost_safety_factor,
-                'fallback_summary': FallbackPlanner(config).summarize_path(concentration_map, fallback_points),
-                'scene_id': scene_id,
-                'case_id': case_id
+            path_data = planning_result.get('path_data') or {}
+            validation_info = path_data.get('validation_info') or {}
+            arrival_success = bool(path_data.get('success', False))
+            used_fallback = bool(validation_info.get('used_fallback', False))
+            training_success = arrival_success and not used_fallback
+            metrics = {
+                'success': training_success,
+                'arrival_success': arrival_success,
+                'training_success': training_success,
+                'planning_method': path_data.get('planning_method'),
+                'used_fallback': used_fallback,
+                'fallback_reason': validation_info.get('fallback_reason', ''),
+                'demo_mode': validation_info.get('demo_mode', 'rl_policy'),
+                'agent_status': validation_info.get('agent_status', ''),
+                'random_mode': validation_info.get('random_mode', ''),
+                'steps_taken': int(path_data.get('steps_taken', 0) or 0),
+                'max_concentration': float(path_data.get('max_concentration', 0.0) or 0.0),
+                'ash_exposure': float(path_data.get('ash_exposure', 0.0) or 0.0),
+                'total_reward': float(path_data.get('total_reward', 0.0) or 0.0),
+                'checkpoint_success_rate': checkpoint_success_rate,
             }
-            if rl_result is not None:
-                path_result['validation_info']['rl_attempt'] = {
-                    'success': rl_result.get('success', False),
-                    'max_concentration': rl_result.get('max_concentration', 0.0),
-                    'steps_taken': rl_result.get('steps_taken', 0)
-                }
-        else:
-            path_result = rl_result
-            path_result['validation_info'] = {
-                'used_fallback': False,
-                'fallback_reason': '',
-                'fallback_limit': fallback_limit,
-                'effective_fallback_limit': effective_fallback_limit,
-                'effective_risk_inflation_radius': effective_risk_radius,
-                'fallback_cost_safety_factor': fallback_cost_safety_factor,
-                'scene_id': scene_id,
-                'case_id': case_id
-            }
-
-        path_result['scene_name'] = scene_name
-        path_result['cloud_info'] = path_result.get('cloud_info') or planner.build_cloud_info()
-        json_ready_result = dict(path_result)
-        dynamic_maps = json_ready_result.pop('concentration_maps', None)
-        if dynamic_maps is None and bool(getattr(config, 'enable_dynamic_ash', False)):
-            dynamic_maps = _generate_dynamic_maps_for_waypoints(
-                config,
-                concentration_map,
-                len(json_ready_result.get('waypoints', []))
-            )
-
-        output_json = os.path.join(case_dir, 'planned_path.json')
-        output_plot = os.path.join(case_dir, 'path_plot.png')
-        animation_dir = os.path.join(case_dir, 'animation')
-        animation_gif = os.path.join(animation_dir, 'flight_animation.gif')
-        planner.export_path_json(json_ready_result, output_json)
-        planner.visualize_path(json_ready_result, save_path=output_plot)
-
-        animation_result = dict(path_result)
-        if dynamic_maps is not None:
-            animation_result['concentration_maps'] = dynamic_maps
-        animation_export = ValidationAnimationExporter(config, concentration_map).export(
-            animation_result,
-            output_dir=animation_dir,
-            gif_path=animation_gif,
-            video_path=None,
-            fps=_parse_int(data.get('animation_fps'), 12),
-            max_frames=_parse_int(data.get('animation_max_frames'), 180),
-            save_frames=_parse_bool(data.get('animation_save_frames'), False)
-        )
-        if isinstance(animation_export, dict):
-            animation_export.pop('video_path', None)
-            animation_export.pop('video_codec', None)
-        json_ready_result.setdefault('validation_info', {})['animation_export'] = animation_export
-
-        outputs = {
-            'planned_path': output_json,
-            'path_plot': output_plot,
-            'animation_gif': animation_export.get('gif_path'),
-            'case_manifest': os.path.join(case_dir, 'case.json')
-        }
-        manifest = {
-            'case_id': case_id,
-            'case_name': scene_name,
-            'created_at': datetime.now().isoformat(timespec='seconds'),
-            'scene_id': scene_id,
-            'scene_name': scene.get('scene_name'),
-            'scene_files': copied_scene_files,
-            'map': {
-                'image_size': list(config.image_size),
-                'geo_center_lat': config.geo_center_lat,
-                'geo_center_lon': config.geo_center_lon,
-                'geo_span_lat': config.geo_span_lat,
-                'geo_span_lon': config.geo_span_lon
-            },
-            'flight': {
-                'start_pixel': [int(start_pixel[1]), int(start_pixel[0])],
-                'target_pixel': [int(target_pixel[1]), int(target_pixel[0])],
-                'start_geo': list(start_geo),
-                'target_geo': list(target_geo)
-            },
-            'planning': {
-                'model_path': data.get('model_path', 'models/final_model.pth'),
-                'safety_factor': float(config.fixed_safety_factor),
-                'dynamic_ash': bool(config.enable_dynamic_ash),
-                'max_steps': max_steps,
-                'fallback_concentration_limit': fallback_limit,
-                'effective_fallback_concentration_limit': effective_fallback_limit,
-                'effective_risk_inflation_radius': effective_risk_radius,
-                'fallback_cost_safety_factor': fallback_cost_safety_factor,
-                'planning_method': json_ready_result.get('planning_method')
-            },
-            'outputs': outputs,
-            'path_data': json_ready_result
-        }
-        manager.save_case(case_id, manifest)
+            items.append({
+                'label': item['label'],
+                'episode': item['episode'],
+                'checkpoint_path': item['path'],
+                'path_data': path_data,
+                'metrics': metrics,
+                'history_snapshot': history_snapshot,
+            })
 
         return jsonify(_to_jsonable({
             'success': True,
-            'case': _attach_file_urls(manifest),
-            'path_data': json_ready_result,
-            'output_file_url': _build_output_url(output_json),
-            'plot_file_url': _build_output_url(output_plot),
-            'animation_gif_url': _build_output_url(animation_export.get('gif_path')),
-            'message': '规划完成并已保存为案例'
+            'items': items,
+            'message': f'已加载 {len(items)} 个 checkpoint 演示当前场景。'
         }))
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
