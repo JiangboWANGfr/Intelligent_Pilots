@@ -640,7 +640,7 @@ def validate_image():
             conversion_mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
             blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
-            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2),
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 1.5),
             conversion_output_dir=conversion_output_dir
         )
          
@@ -703,7 +703,7 @@ def convert_image():
             mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
             blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
-            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2)
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 1.5)
         )
         scene_slug = secure_filename(scene_name) or 'image_validation_scene'
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -756,7 +756,7 @@ def import_scene_image():
             conversion_mode=data.get('conversion_mode', 'auto'),
             invert=data.get('invert', 'auto'),
             blur_kernel=_parse_int(data.get('blur_kernel', 5), 5),
-            plume_scale=_parse_plume_scale(data.get('plume_scale'), 2.2)
+            plume_scale=_parse_plume_scale(data.get('plume_scale'), 1.5)
         )
         return jsonify(_to_jsonable({
             'success': True,

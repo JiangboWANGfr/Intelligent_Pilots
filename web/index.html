@@ -222,7 +222,7 @@
                     </div>
                     <div class="field-group">
                         <label for="validationPlumeScale">火山灰放大</label>
-                        <input id="validationPlumeScale" class="input-control" type="number" step="0.1" min="0.5" max="6.0" value="2.2">
+                        <input id="validationPlumeScale" class="input-control" type="number" step="0.1" min="0.5" max="6.0" value="1.5">
                     </div>
                     <div class="field-group">
                         <label for="validationImageHeight">输出高度</label>
@@ -274,11 +274,11 @@
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLat">中心纬度</label>
-                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="63.6314">
+                        <input id="validationCenterLat" class="input-control" type="number" step="0.0001" value="62.2005">
                     </div>
                     <div class="field-group">
                         <label for="validationCenterLon">中心经度</label>
-                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="-19.6130">
+                        <input id="validationCenterLon" class="input-control" type="number" step="0.0001" value="-18.5217">
                     </div>
                     <div class="field-group">
                         <label for="validationSpanLat">纬向跨度</label>
@@ -358,7 +358,6 @@
             <div class="panel-section">
                 <h3>图层控制</h3>
                 <label class="checkbox-label"><input type="checkbox" id="showCloud" checked onchange="toggleCloud(this.checked)">显示火山灰云</label>
-                <label class="checkbox-label"><input type="checkbox" id="showOriginalRoute" checked onchange="toggleOriginalRoute(this.checked)">显示直飞参考线</label>
                 <label class="checkbox-label"><input type="checkbox" id="showPlannedPath" checked onchange="togglePlannedPath(this.checked)">显示规划路径/已飞轨迹</label>
                 <label class="checkbox-label"><input type="checkbox" id="showAircraft" checked onchange="toggleAircraft(this.checked)">显示飞机位置</label>
             </div>
@@ -406,7 +405,6 @@
                     <div class="legend-item"><span class="legend-color" style="background:#FFFF00"></span><span>低危 (0.2-0.5)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FFA500"></span><span>中危 (0.5-0.8)</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#FF0000"></span><span>高危 (&gt;0.8)</span></div>
-                    <div class="legend-item"><span class="legend-color" style="background:#FFFFFF"></span><span>白色虚线：直飞参考线</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#00FF00"></span><span>绿色实线：完整规划路径</span></div>
                     <div class="legend-item"><span class="legend-color" style="background:#00FFFF"></span><span>青色亮线：飞机已飞轨迹</span></div>
                 </div>
@@ -778,8 +776,8 @@ function geoToPixel(lat, lon) {
 }
 
 function isGeoInsideScene(lat, lon) {
-    const centerLat = getNumericInputValue('validationCenterLat', 63.6314);
-    const centerLon = getNumericInputValue('validationCenterLon', -19.6130);
+    const centerLat = getNumericInputValue('validationCenterLat', 62.2005);
+    const centerLon = getNumericInputValue('validationCenterLon', -18.5217);
     const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 8.0)));
     const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 12.0)));
     return (
@@ -949,7 +947,7 @@ async function convertValidationImage() {
         formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
         formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
         formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
-        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 2.2))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 1.5))));
         formData.append('image_size', JSON.stringify([
             Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
             Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
@@ -1078,8 +1076,8 @@ async function generateRandomScene() {
 }
 
 function applySuggestedRoute() {
-    document.getElementById('validationCenterLat').value = '63.6314';
-    document.getElementById('validationCenterLon').value = '-19.6130';
+    document.getElementById('validationCenterLat').value = '62.2005';
+    document.getElementById('validationCenterLon').value = '-18.5217';
     document.getElementById('validationSpanLat').value = '8.00';
     document.getElementById('validationSpanLon').value = '12.00';
     document.getElementById('validationStartLat').value = '62.1000';
@@ -1101,8 +1099,8 @@ function applySuggestedRoute() {
 
 function buildValidationConfigPayload() {
     const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
-    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 63.6314);
-    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -19.6130);
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 62.2005);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -18.5217);
     payload.geo_span_lat = getNumericInputValue('validationSpanLat', 8.0);
     payload.geo_span_lon = getNumericInputValue('validationSpanLon', 12.0);
     payload.image_size = [
@@ -1455,7 +1453,7 @@ async function runValidationFromImage() {
         formData.append('animation_max_frames', String(Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)))));
         formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
         formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
-        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 2.2))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 1.5))));
         formData.append('image_size', JSON.stringify([
             Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
             Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
@@ -1636,6 +1634,7 @@ function renderOriginalRoute(start, target) {
             clampToGround: false
         }
     });
+    <!-- originalRouteEntity = null; -->
 
     routeMarkerEntities.push(viewer.entities.add({
         name: 'Start',
@@ -2114,8 +2113,8 @@ async function loadValidationDefaults() {
         validationBaseConfig = config;
 
         document.getElementById('validationSceneName').value = '冰岛火山灰测试';
-        document.getElementById('validationCenterLat').value = '63.6314';
-        document.getElementById('validationCenterLon').value = '-19.6130';
+        document.getElementById('validationCenterLat').value = '62.2005';
+        document.getElementById('validationCenterLon').value = '-18.5217';
         document.getElementById('validationSpanLat').value = '8.00';
         document.getElementById('validationSpanLon').value = '12.00';
         if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
