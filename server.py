@@ -421,15 +421,15 @@ def _encode_dynamic_preview_frames(dynamic_maps,
             map_array = map_array / 255.0
         map_array = np.clip(map_array, 0.0, 1.0)
         rgba = np.zeros((map_array.shape[0], map_array.shape[1], 4), dtype=np.uint8)
-        safe = (map_array >= threshold * 0.15) & (map_array < threshold * 0.5)
-        low = (map_array >= threshold * 0.5) & (map_array < threshold)
-        medium = (map_array >= threshold) & (map_array < threshold * 1.5)
-        high = map_array >= threshold * 1.5
-        rgba[safe] = [0, 255, 0, 82]
-        rgba[low] = [255, 255, 0, 118]
-        rgba[medium] = [255, 165, 0, 152]
+        safe = (map_array > 0.02) & (map_array < 0.20)
+        low = (map_array >= 0.20) & (map_array < 0.50)
+        medium = (map_array >= 0.50) & (map_array < 0.80)
+        high = map_array >= 0.80
+        rgba[safe] = [0, 255, 0, 78]
+        rgba[low] = [255, 255, 0, 120]
+        rgba[medium] = [255, 165, 0, 155]
         rgba[high] = [255, 0, 0, 190]
-        rgba[:, :, 3] = np.maximum(rgba[:, :, 3], np.clip(map_array * 170, 0, 190).astype(np.uint8))
+        rgba[:, :, 3] = np.maximum(rgba[:, :, 3], np.clip(map_array * 165, 0, 190).astype(np.uint8))
         if target_size:
             rgba = cv2.resize(rgba, target_size, interpolation=cv2.INTER_LINEAR)
         success, encoded = cv2.imencode('.png', cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA))
@@ -785,18 +785,39 @@ def _execute_case_planning(data,
         )
     dynamic_preview_frames = []
     if bool(getattr(config, 'enable_dynamic_ash', False)):
-        if dynamic_maps is None:
-            dynamic_maps = _generate_dynamic_maps_for_waypoints(
-                config,
-                concentration_map,
-                len(json_ready_result.get('waypoints', []))
-            )
+        preview_config = VolcanicAshConfig.from_dict(requested_scene_config.to_dict())
+        for attr in [
+            'enable_dynamic_ash',
+            'ash_advection_speed',
+            'ash_diffusion_sigma',
+            'ash_decay_rate',
+            'ash_turbulence_drift',
+            'ash_local_deformation_strength',
+            'ash_local_flow_scale',
+            'ash_local_flow_smoothness',
+            'ash_shear_strength',
+            'ash_local_flow_update_interval',
+            'ash_dynamic_update_interval',
+            'ash_dynamic_renormalize',
+            'ash_advection_speed_min',
+            'ash_advection_speed_max',
+            'ash_wind_direction_jitter',
+            'ash_rotation_rate',
+            'ash_rotation_rate_jitter',
+        ]:
+            if hasattr(config, attr):
+                setattr(preview_config, attr, getattr(config, attr))
+        preview_dynamic_maps = _generate_dynamic_maps_for_waypoints(
+            preview_config,
+            scene_concentration_map,
+            len(json_ready_result.get('waypoints', []))
+        )
         dynamic_preview_frames = _encode_dynamic_preview_frames(
-            dynamic_maps,
-            float(config.concentration_threshold),
+            preview_dynamic_maps,
+            float(preview_config.concentration_threshold),
             max_frames=32,
             target_size=(320, 320)
-        ) if dynamic_maps is not None else []
+        ) if preview_dynamic_maps is not None else []
         if dynamic_preview_frames:
             json_ready_result['dynamic_preview_frames'] = dynamic_preview_frames
 
