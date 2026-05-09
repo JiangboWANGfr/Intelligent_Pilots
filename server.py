@@ -416,8 +416,9 @@ def _encode_dynamic_preview_frames(dynamic_maps,
     indices = np.linspace(0, len(dynamic_maps) - 1, take, dtype=int)
     frames = []
     for index in indices.tolist():
-        map_array = np.asarray(dynamic_maps[index], dtype=np.float32)
-        if map_array.dtype == np.uint8:
+        raw_map = np.asarray(dynamic_maps[index])
+        map_array = raw_map.astype(np.float32, copy=False)
+        if np.issubdtype(raw_map.dtype, np.integer):
             map_array = map_array / 255.0
         map_array = np.clip(map_array, 0.0, 1.0)
         rgba = np.zeros((map_array.shape[0], map_array.shape[1], 4), dtype=np.uint8)
