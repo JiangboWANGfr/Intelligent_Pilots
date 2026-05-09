@@ -327,7 +327,7 @@
                     </div>
                     <div class="field-group">
                         <label for="validationModelPath">模型路径</label>
-                        <input id="validationModelPath" class="input-control" type="text" value="models/checkpoint_diversity_probe_v1">
+                        <input id="validationModelPath" class="input-control" type="text" value="models/large_slow_dynamic_ash_turn_controller_v2/final_model.pth">
                     </div>
                 </div>
                 <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
@@ -1311,7 +1311,7 @@ function buildPlanningRequestPayload() {
         planning_image_size: [1024, 1024],
         safety_factor: Number(document.getElementById('validationSafetyFactor').value),
         dynamic_ash: document.getElementById('validationDynamicAsh').value === 'true',
-        prefer_fallback_planner: true,
+        prefer_fallback_planner: false,
         model_path: document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth',
         fallback_concentration_limit: getNumericInputValue('validationFallbackLimit', 0.3),
         max_steps: Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500))),

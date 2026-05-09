@@ -515,7 +515,6 @@ class VolcanicAshEnv(gym.Env):
     def _advance_dynamic_ash(self):
         if (
             not self.enable_dynamic_ash
-            or self.external_concentration_map is not None
             or self.step_count % self.ash_dynamic_update_interval != 0
         ):
             return
