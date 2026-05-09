@@ -251,9 +251,9 @@
                     </select>
                 </div>
                 <div class="mode-row">
-                    <button class="btn" onclick="setValidationPickMode('center')">地球上设置火山中心</button>
-                    <button class="btn" onclick="setValidationPickMode('start')">地球上设置起点</button>
-                    <button class="btn" onclick="setValidationPickMode('target')">地球上设置终点</button>
+                    <button class="btn" onclick="setValidationPickMode('center')">设置火山中心</button>
+                    <button class="btn" onclick="setValidationPickMode('start')">设置起点</button>
+                    <button class="btn" onclick="setValidationPickMode('target')">设置终点</button>
                 </div>
                 <div id="validationPixelStatus" class="pixel-status">导入或生成火山灰场景后，可在地球或标准图上点击设置起点和终点。</div>
                 <img id="validationConvertedPreview" class="media-preview map-click-preview" alt="标准火山灰浓度图" onclick="handleConvertedMapClick(event)">
@@ -327,7 +327,7 @@
                     </div>
                     <div class="field-group">
                         <label for="validationModelPath">模型路径</label>
-                        <input id="validationModelPath" class="input-control" type="text" value="models/large_slow_dynamic_ash_turn_controller_v2/final_model.pth">
+                        <input id="validationModelPath" class="input-control" type="text" value="models/checkpoint_diversity_probe_v1">
                     </div>
                 </div>
                 <button class="btn btn-full" onclick="applySuggestedRoute()">按位置推荐起终点</button>
