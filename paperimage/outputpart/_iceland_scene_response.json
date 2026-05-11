@@ -1,0 +1,170 @@
+{
+  "message": "\u573a\u666f\u5df2\u5bfc\u5165\u5e76\u4fdd\u5b58",
+  "scene": {
+    "cloud_info": {
+      "center_lat": 62.628728775000674,
+      "center_lon": -17.356750036622017,
+      "zone_radii": {
+        "high": 1.6189,
+        "low": 2.8377,
+        "medium": 1.9615,
+        "safe": 2.9038
+      }
+    },
+    "config": {
+      "add_filaments": true,
+      "add_fractal_boundary": true,
+      "airport_clearance_radius": 35.0,
+      "airport_safety_threshold_ratio": 0.35,
+      "arrival_cloud_clearance_radius": 180.0,
+      "ash_advection_speed": 0.18,
+      "ash_advection_speed_max": 0.28,
+      "ash_advection_speed_min": 0.08,
+      "ash_avoidance_activation_ratio": 0.6,
+      "ash_avoidance_gain": 0.0,
+      "ash_decay_rate": 0.0005,
+      "ash_diffusion_sigma": 0.16,
+      "ash_dynamic_renormalize": false,
+      "ash_dynamic_update_interval": 1,
+      "ash_local_deformation_strength": 0.22,
+      "ash_local_flow_scale": 140.0,
+      "ash_local_flow_smoothness": 0.992,
+      "ash_local_flow_update_interval": 16,
+      "ash_rotation_enabled": true,
+      "ash_rotation_jitter_deg": 0.03,
+      "ash_rotation_rate_deg": 0.08,
+      "ash_shear_strength": 0.08,
+      "ash_turbulence_drift": 0.08,
+      "ash_wind_direction_jitter_deg": 8.0,
+      "ash_wind_smoothness": 0.985,
+      "ash_wind_speed_jitter_ratio": 0.2,
+      "centers": [
+        {
+          "std_x": 120.83,
+          "std_y": 88.61,
+          "weight": 0.3311,
+          "x": 800.01,
+          "y": 912.86
+        },
+        {
+          "std_x": 83.9,
+          "std_y": 70.06,
+          "weight": 0.3311,
+          "x": 358.41,
+          "y": 699.43
+        },
+        {
+          "std_x": 46.28,
+          "std_y": 180.16,
+          "weight": 0.2583,
+          "x": 913.76,
+          "y": 284.53
+        },
+        {
+          "std_x": 50.97,
+          "std_y": 34.96,
+          "weight": 0.0795,
+          "x": 116.12,
+          "y": 286.28
+        }
+      ],
+      "cloud_size": 100.0,
+      "concentration_threshold": 0.3,
+      "cruise_speed_mode": "fixed",
+      "departure_cloud_clearance_radius": 220.0,
+      "enable_dynamic_ash": false,
+      "enable_irregular": false,
+      "fixed_cruise_speed": 9.0,
+      "fixed_safety_factor": 1.0,
+      "fractal_dimension": 1.5,
+      "geo_center_lat": 63.6314,
+      "geo_center_lon": -19.613,
+      "geo_span_lat": 8.0,
+      "geo_span_lon": 12.0,
+      "image_size": [
+        1024,
+        1024
+      ],
+      "initial_clear_concentration_ratio": 0.2,
+      "initial_clear_path_distance": 180.0,
+      "mass_ratio": 0.8,
+      "max_cruise_speed": 13.0,
+      "max_safety_factor": 1.8,
+      "min_cruise_speed": 7.0,
+      "min_safety_factor": 0.6,
+      "model_type": "single_center",
+      "num_centers": 4,
+      "num_filaments": 5,
+      "path_boundary_margin": 45.0,
+      "path_corridor_radius": 30.0,
+      "path_lookahead_distance": 45.0,
+      "path_planning_threshold_ratio": 0.8,
+      "path_risk_inflation_radius": 8.0,
+      "random_scene_cloud_size_max": 84.0,
+      "random_scene_cloud_size_min": 62.0,
+      "random_scene_max_anisotropy": 3.6,
+      "random_scene_max_attempts": 8,
+      "random_scene_max_centers": 6,
+      "random_scene_max_high_area": 12.0,
+      "random_scene_max_low_area": 48.0,
+      "random_scene_max_medium_area": 24.0,
+      "random_scene_max_std": 48.0,
+      "random_scene_max_weight": 1.0,
+      "random_scene_min_anisotropy": 1.4,
+      "random_scene_min_centers": 1,
+      "random_scene_min_medium_area": 2.0,
+      "random_scene_min_std": 18.0,
+      "random_scene_min_weight": 0.25,
+      "random_scene_position_margin": 140.0,
+      "random_scene_seed": null,
+      "random_scene_threshold_max": 0.34,
+      "random_scene_threshold_min": 0.28,
+      "random_seed": null,
+      "randomize_irregular_each_episode": true,
+      "reference_path_points": 160,
+      "safety_factor_mode": "random",
+      "scene_name": "iceland_test2_scaled",
+      "success_threshold": 20.0,
+      "training_scene_names": [],
+      "turbulence_scale": 0.15,
+      "use_random_ash_scenes": false,
+      "wind_direction": 45.0,
+      "wind_strength": 0.3
+    },
+    "created_at": "2026-05-08T01:28:11",
+    "extra": {
+      "blur_kernel": 5,
+      "conversion_mode": "color",
+      "plume_scale": 2.2
+    },
+    "file_urls": {
+      "concentration_map": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_concentration.npy",
+      "concentration_png": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_concentration.png",
+      "config": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/scene_config.json",
+      "overlay_image": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_overlay.png",
+      "preview_image": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_classified_preview.png",
+      "source_image": "/api/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/source_image.png"
+    },
+    "files": {
+      "concentration_map": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_concentration.npy",
+      "concentration_png": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_concentration.png",
+      "config": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/scene_config.json",
+      "overlay_image": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_overlay.png",
+      "preview_image": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/concentration_classified_preview.png",
+      "source_image": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_scenes/iceland_test2_scaled_20260508_012811_292159/source_image.png"
+    },
+    "scene_id": "iceland_test2_scaled_20260508_012811_292159",
+    "scene_name": "iceland_test2_scaled",
+    "scene_type": "imported_image",
+    "summary": {
+      "active_area_ratio": 0.12087249755859375,
+      "max_concentration": 1.0,
+      "mean_concentration": 0.10342375934123993,
+      "shape": [
+        1024,
+        1024
+      ]
+    }
+  },
+  "success": true
+}

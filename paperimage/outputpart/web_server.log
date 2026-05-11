@@ -1,0 +1,97 @@
+============================================================
+Volcanic Ash Avoidance System - Web Server Starting
+============================================================
+Access URL: http://localhost:5050
+API Endpoints:
+  GET  /api/presets      - Get preset configs
+  POST /api/generate     - Generate images
+  POST /api/train        - Train model
+  POST /api/plan         - Plan path
+  POST /api/multi-plan   - Multi-constraint planning
+  POST /api/validate-image - Validate an image-derived ash scene
+  POST /api/scenes/import-image - Import and save a real ash scene
+  POST /api/scenes/generated - Generate and save an ash scene
+  POST /api/cases/run    - Run, save, and replay a planning case
+  POST /api/analyze      - Data analysis
+============================================================
+ * Serving Flask app 'server'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5050
+ * Running on http://192.168.31.147:5050
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [09/May/2026 10:06:40] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:06:40] "GET /api/output/current_config.json HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:06:41] "GET /api/cases HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:06:41] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:07:06] "POST /api/scenes/import-image HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:07:06] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_classified_preview.png?t=1778292426842 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:07:07] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:07:09] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292426842 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:08:33] "POST /api/cases/checkpoint-demo HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:08:33] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292513804 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:08:38] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292518302 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:08:41] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292521473 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:08:51] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292531582 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:01] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292541691 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:11] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292551800 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:15] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292555239 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:18] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292558697 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:22] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292562157 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:25] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292565616 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:41] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:42] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292582090 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:51] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:09:52] "GET /api/output/web_scenes/ash_scene_20260509_100706_416604/concentration_overlay.png?t=1778292591988 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:31] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:32] "GET /api/output/current_config.json HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:32] "GET /api/cases HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:32] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:43] "POST /api/scenes/import-image HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:43] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_classified_preview.png?t=1778292703743 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:43] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:11:43] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778292703744 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:03] "POST /api/cases/checkpoint-demo HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:04] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778292723988 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:16] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:16] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778292736669 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:31] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:31] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778292751837 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:42] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:12:43] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778292763116 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 10:23:07] "GET /api/output/web_scenes/ash_scene_20260509_101143_668699/concentration_overlay.png?t=1778293387880 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:24:35] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:24:49] "POST /api/scenes/import-image HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:24:49] "GET /api/output/web_scenes/ash_scene_20260509_112449_303893/concentration_classified_preview.png?t=1778297089385 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:24:49] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:24:49] "GET /api/output/web_scenes/ash_scene_20260509_112449_303893/concentration_overlay.png?t=1778297089385 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:02] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:10] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:10] "GET /api/output/web_scenes/ash_scene_20260509_112510_423065/concentration_classified_preview.png?t=1778297110477 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:10] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:10] "GET /api/output/web_scenes/ash_scene_20260509_112510_423065/concentration_overlay.png?t=1778297110477 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:13] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:13] "GET /api/output/web_scenes/ash_scene_20260509_112513_100785/concentration_classified_preview.png?t=1778297113169 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:13] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:13] "GET /api/output/web_scenes/ash_scene_20260509_112513_100785/concentration_overlay.png?t=1778297113169 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:20] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:20] "GET /api/output/web_scenes/ash_scene_20260509_112520_603001/concentration_classified_preview.png?t=1778297120676 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:20] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:20] "GET /api/output/web_scenes/ash_scene_20260509_112520_603001/concentration_overlay.png?t=1778297120677 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:35] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:25:50] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:26:15] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:21] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:23] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:23] "GET /api/output/web_scenes/ash_scene_20260509_112723_413066/concentration_classified_preview.png?t=1778297243488 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:23] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:23] "GET /api/output/web_scenes/ash_scene_20260509_112723_413066/concentration_overlay.png?t=1778297243488 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:33] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:33] "GET /api/output/web_scenes/ash_scene_20260509_112732_958634/concentration_classified_preview.png?t=1778297253028 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:33] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:33] "GET /api/output/web_scenes/ash_scene_20260509_112732_958634/concentration_overlay.png?t=1778297253028 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:40] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 11:27:55] "POST /api/cases/run HTTP/1.1" 200 -
+/Users/jiangbowang/miniforge3/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

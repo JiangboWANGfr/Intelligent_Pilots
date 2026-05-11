@@ -1,0 +1,1714 @@
+
+const USE_FREE_OSM = false;
+
+let viewer = null;
+let cloudEntities = [];
+let originalRouteEntity = null;
+let plannedPathEntity = null;
+let flownTraceEntity = null;
+let routeMarkerEntities = [];
+let waypointEntities = [];
+let aircraftEntity = null;
+
+let trajectory = [];
+let concentrationAlongPath = [];
+let currentIndex = 0;
+let isPlaying = false;
+let speed = 1.0;
+let animationId = null;
+let plannedPathVisible = true;
+
+let currentCenterLon = 120;
+let currentCenterLat = 35;
+let validationImageFile = null;
+let validationPreviewUrl = null;
+let validationBaseConfig = null;
+let latestValidationResponse = null;
+let validationConvertedMap = null;
+let validationPickMode = 'start';
+let validationStartPixel = null;
+let validationTargetPixel = null;
+let currentScene = null;
+let currentSceneId = null;
+let savedScenes = [];
+let savedCases = [];
+let globePickHandler = null;
+let latestPlanningCase = null;
+
+// ===== 动态云状态 =====
+let cloudAnimStartTime = null;      // 云动画开始时间（ms）
+let cloudWindAngle = 0.5;           // 风向（弧度）
+let cloudWindSpeedDegPerSec = 0.04; // 风速（度/秒）
+let cloudExpansionRate = 0.00015;   // 扩散速率（无量纲/秒）
+// 预计算的云形基础坐标（相对中心，避免每帧重算形状）
+let cloudBaseCoords = {};           // { level: [relLon, relLat, ...] }
+const cloudDangerColors = {
+    safe: Cesium.Color.fromCssColorString('#00FF00').withAlpha(0.32),
+    low: Cesium.Color.fromCssColorString('#FFFF00').withAlpha(0.48),
+    medium: Cesium.Color.fromCssColorString('#FFA500').withAlpha(0.58),
+    high: Cesium.Color.fromCssColorString('#FF0000').withAlpha(0.72)
+};
+const cloudAltitudeOffset = { safe: 0, low: 150, medium: 300, high: 450 };
+const cloudZoneOrder = ['safe', 'low', 'medium', 'high'];
+const cloudInnerZoneMap = { safe: 'low', low: 'medium', medium: 'high', high: null };
+
+// ===== 不规则云形辅助函数 =====
+function seededRandom(seed) {
+    let s = (seed ^ 0x12345678) | 1;
+    return function() {
+        s ^= (s << 13); s ^= (s >>> 17); s ^= (s << 5);
+        return (s >>> 0) / 0xFFFFFFFF;
+    };
+}
+
+/**
+ * 生成不规则云形多边形坐标
+ * @param {number} centerLon - 中心经度
+ * @param {number} centerLat - 中心纬度
+ * @param {number} baseRadius - 基础半径（度）
+ * @param {number} numPoints - 顶点数
+ * @param {number} seed - 随机种子（同一云体各区域用相同种子保证形状一致性）
+ * @param {number} windAngle - 风向角（弧度），控制拉伸方向
+ * @returns {number[]} Cesium.fromDegreesArray 格式坐标数组
+ */
+function generateIrregularCloudCoords(centerLon, centerLat, baseRadius, numPoints, seed, windAngle) {
+    const rng = seededRandom(seed);
+    const wd = windAngle || 0.35;
+    // 生成控制点（平滑扰动因子）
+    const numCP = 18;
+    const cpFactors = [];
+    for (let i = 0; i < numCP; i++) {
+        cpFactors.push(0.68 + rng() * 0.64); // 0.68 ~ 1.32
+    }
+    const coords = [];
+    for (let i = 0; i <= numPoints; i++) {
+        const angle = (i / numPoints) * 2 * Math.PI;
+        const cpPos = (angle / (2 * Math.PI)) * numCP;
+        const cpA = Math.floor(cpPos) % numCP;
+        const cpB = (cpA + 1) % numCP;
+        const t = cpPos - Math.floor(cpPos);
+        // smoothstep 插值，避免锯齿
+        const ts = t * t * (3 - 2 * t);
+        const sf = cpFactors[cpA] * (1 - ts) + cpFactors[cpB] * ts;
+        const r = baseRadius * sf;
+        // 风向拉伸：沿风向轴拉长，垂直方向压缩，模拟真实灰云形态
+        const localAngle = angle - wd;
+        const stretchLon = 1.30 + 0.12 * Math.cos(localAngle);
+        const stretchLat = 0.80 - 0.10 * Math.cos(localAngle);
+        coords.push(centerLon + r * Math.cos(angle) * stretchLon);
+        coords.push(centerLat + r * Math.sin(angle) * stretchLat);
+    }
+    return coords;
+}
+
+function transformCloudCoords(baseCoords, centerLon, centerLat, radiusScale, driftX, driftY, scale) {
+    const finalCoords = [];
+    for (let i = 0; i < baseCoords.length; i += 2) {
+        finalCoords.push(centerLon + baseCoords[i] * radiusScale * scale + driftX);
+        finalCoords.push(centerLat + baseCoords[i + 1] * radiusScale * scale + driftY);
+    }
+    return finalCoords;
+}
+
+function buildCloudHierarchy(baseCoords, centerLon, centerLat, outerRadius, innerRadius, driftX, driftY, scale) {
+    const outerCoords = transformCloudCoords(baseCoords, centerLon, centerLat, outerRadius, driftX, driftY, scale);
+    if (!innerRadius) {
+        return new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(outerCoords));
+    }
+    const innerCoords = transformCloudCoords(baseCoords, centerLon, centerLat, innerRadius, driftX, driftY, scale);
+    return new Cesium.PolygonHierarchy(
+        Cesium.Cartesian3.fromDegreesArray(outerCoords),
+        [new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(innerCoords))]
+    );
+}
+
+function createDynamicCloudLayers(centerLon, centerLat, zoneRadii, baseSeed, windAngle, windSpeed, expansionRate, points) {
+    const numPoints = points || 80;
+    cloudBaseCoords = {
+        base: generateIrregularCloudCoords(0, 0, 1, numPoints, baseSeed, windAngle),
+        radii: zoneRadii
+    };
+    cloudWindAngle = windAngle;
+    cloudWindSpeedDegPerSec = windSpeed;
+    cloudExpansionRate = expansionRate;
+    cloudAnimStartTime = true;
+
+    cloudZoneOrder.forEach(level => {
+        const dynamicHierarchy = new Cesium.CallbackProperty(() => {
+            if (!cloudAnimStartTime) return new Cesium.PolygonHierarchy();
+            const elapsed = currentIndex * 0.12;
+            const dx = cloudWindSpeedDegPerSec * elapsed * Math.cos(cloudWindAngle);
+            const dy = cloudWindSpeedDegPerSec * elapsed * Math.sin(cloudWindAngle) * 0.7;
+            const scale = 1 + cloudExpansionRate * elapsed;
+            const innerLevel = cloudInnerZoneMap[level];
+            const innerRadius = innerLevel ? zoneRadii[innerLevel] : null;
+            return buildCloudHierarchy(
+                cloudBaseCoords.base,
+                centerLon,
+                centerLat,
+                zoneRadii[level],
+                innerRadius,
+                dx,
+                dy,
+                scale
+            );
+        }, false);
+
+        cloudEntities.push(viewer.entities.add({
+            name: `Cloud ${level}`,
+            polygon: {
+                hierarchy: dynamicHierarchy,
+                height: 10000 + cloudAltitudeOffset[level],
+                extrudedHeight: 10000 + cloudAltitudeOffset[level] + 600,
+                material: cloudDangerColors[level],
+                outline: true,
+                outlineColor: cloudDangerColors[level].withAlpha(0.95),
+                outlineWidth: 1
+            }
+        }));
+    });
+}
+
+function initCesium() {
+    let imageryProvider, terrainProvider;
+
+    if (USE_FREE_OSM) {
+        imageryProvider = new Cesium.OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/'
+        });
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+    } else {
+        // 使用 Cesium 内置 NaturalEarth 底图，无需外部地图服务，不依赖网络连接
+        imageryProvider = new Cesium.TileMapServiceImageryProvider({
+            url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+        });
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+    }
+
+    viewer = new Cesium.Viewer('cesiumContainer', {
+        imageryProvider: imageryProvider,
+        terrainProvider: terrainProvider,
+        animation: false,
+        timeline: false,
+        homeButton: true,
+        sceneModePicker: true,
+        baseLayerPicker: false,
+        navigationHelpButton: false,
+        fullscreenButton: true,
+        geocoder: true,
+        infoBox: true,
+        selectionIndicator: true,
+        scene3DOnly: true,
+        shouldAnimate: true
+    });
+
+    viewer._cesiumWidget._creditContainer.style.display = "none";
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+    viewer.scene.skyAtmosphere.show = true;
+
+    viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(120, 30, 3000000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+        duration: 2
+    });
+
+    globePickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    globePickHandler.setInputAction(handleGlobeClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+}
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const raw = JSON.parse(e.target.result);
+            processData(raw);
+            updateDataStatus('loaded', '已加载');
+        } catch (err) {
+            alert('JSON解析错误: ' + err.message);
+            updateDataStatus('error', '加载失败');
+        }
+    };
+    reader.readAsText(file);
+
+    // 重置文件输入框，允许重复选择同一文件
+    event.target.value = '';
+}
+
+function getNumericInputValue(id, fallback) {
+    const value = Number(document.getElementById(id).value);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function setValidationStatus(text, status = '') {
+    const el = document.getElementById('validationStatus');
+    el.textContent = text;
+    el.className = status ? `status-note ${status}` : 'status-note';
+}
+
+function withCacheBust(url) {
+    if (!url) return '';
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${Date.now()}`;
+}
+
+function setValidationLink(linkId, url, text) {
+    const el = document.getElementById(linkId);
+    if (url) {
+        el.href = withCacheBust(url);
+        el.textContent = text;
+        el.style.display = 'block';
+        return;
+    }
+    el.removeAttribute('href');
+    el.style.display = 'none';
+}
+
+function handleValidationImageSelect(event) {
+    const file = event.target.files[0] || null;
+    validationImageFile = file;
+
+    const fileNameEl = document.getElementById('validationFileName');
+    const previewEl = document.getElementById('validationImagePreview');
+
+    if (validationPreviewUrl) {
+        URL.revokeObjectURL(validationPreviewUrl);
+        validationPreviewUrl = null;
+    }
+
+    if (!file) {
+        fileNameEl.textContent = '未选择图片';
+        previewEl.removeAttribute('src');
+        previewEl.style.display = 'none';
+        setValidationStatus('请先选择一张现实图。');
+        return;
+    }
+
+    validationPreviewUrl = URL.createObjectURL(file);
+    fileNameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    previewEl.src = validationPreviewUrl;
+    previewEl.style.display = 'block';
+    validationConvertedMap = null;
+    validationStartPixel = null;
+    validationTargetPixel = null;
+    const convertedPreview = document.getElementById('validationConvertedPreview');
+    convertedPreview.removeAttribute('src');
+    convertedPreview.style.display = 'none';
+    updateValidationPixelStatus();
+    setValidationStatus('图片已选择，可直接生成验证动画。');
+}
+
+function updateValidationPixelStatus() {
+    const status = document.getElementById('validationPixelStatus');
+    const mapText = validationConvertedMap
+        ? `标准图: ${validationConvertedMap.width}×${validationConvertedMap.height}`
+        : '标准图: 未转换';
+    const sceneText = currentSceneId ? `场景: ${currentSceneId}` : '场景: 未选择';
+    const startGeo = getValidationPointGeo('start');
+    const targetGeo = getValidationPointGeo('target');
+    const startInScene = isGeoInsideScene(startGeo.lat, startGeo.lon) ? '局部图内' : '局部图外';
+    const targetInScene = isGeoInsideScene(targetGeo.lat, targetGeo.lon) ? '局部图内' : '局部图外';
+    const startText = validationStartPixel
+        ? `起点: ${startGeo.lat.toFixed(4)}, ${startGeo.lon.toFixed(4)} (${startInScene})`
+        : '起点: 未设置';
+    const targetText = validationTargetPixel
+        ? `终点: ${targetGeo.lat.toFixed(4)}, ${targetGeo.lon.toFixed(4)} (${targetInScene})`
+        : '终点: 未设置';
+    const modeText = validationPickMode === 'center' ? '火山中心' : (validationPickMode === 'start' ? '起点' : '终点');
+    status.textContent = `${sceneText} | ${mapText} | ${startText} | ${targetText} | 当前点击: ${modeText}`;
+}
+
+function setValidationPickMode(mode) {
+    validationPickMode = mode === 'center' ? 'center' : (mode === 'target' ? 'target' : 'start');
+    updateValidationPixelStatus();
+    const modeText = validationPickMode === 'center' ? '火山中心' : (validationPickMode === 'start' ? '起点' : '终点');
+    setValidationStatus(`当前可在地球上点击设置${modeText}。标准图点击只用于起点和终点。`);
+}
+
+function pixelToGeo(pixel) {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
+    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
+    const spanLat = getNumericInputValue('validationSpanLat', 2.0);
+    const spanLon = getNumericInputValue('validationSpanLon', 2.0);
+    const height = Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768)));
+    const width = Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)));
+    return {
+        lat: centerLat + (0.5 - pixel.y / height) * spanLat,
+        lon: centerLon + (pixel.x / width - 0.5) * spanLon
+    };
+}
+
+function geoToPixel(lat, lon) {
+    const centerLat = getNumericInputValue('validationCenterLat', 35.0);
+    const centerLon = getNumericInputValue('validationCenterLon', 120.0);
+    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 2.0)));
+    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 2.0)));
+    const height = Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 768)));
+    const width = Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 768)));
+    const x = Math.round(((lon - centerLon) / spanLon + 0.5) * width);
+    const y = Math.round((0.5 - (lat - centerLat) / spanLat) * height);
+    return {
+        x: Math.max(0, Math.min(width - 1, x)),
+        y: Math.max(0, Math.min(height - 1, y))
+    };
+}
+
+function isGeoInsideScene(lat, lon) {
+    const centerLat = getNumericInputValue('validationCenterLat', 62.2005);
+    const centerLon = getNumericInputValue('validationCenterLon', -18.5217);
+    const spanLat = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLat', 8.0)));
+    const spanLon = Math.max(1e-9, Math.abs(getNumericInputValue('validationSpanLon', 12.0)));
+    return (
+        lat >= centerLat - spanLat / 2 &&
+        lat <= centerLat + spanLat / 2 &&
+        lon >= centerLon - spanLon / 2 &&
+        lon <= centerLon + spanLon / 2
+    );
+}
+
+function setFlightPixelPoint(pixel, sourceLabel) {
+    if (validationPickMode === 'start') {
+        validationStartPixel = pixel;
+        validationPickMode = 'target';
+    } else {
+        validationTargetPixel = pixel;
+        validationPickMode = 'start';
+    }
+    applyPixelToGeoInputs();
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    setValidationStatus(`${sourceLabel || '点击'}已设置，当前等待设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
+}
+
+function setFlightGeoPoint(kind, lat, lon, sourceLabel) {
+    if (kind === 'start') {
+        document.getElementById('validationStartLat').value = lat.toFixed(4);
+        document.getElementById('validationStartLon').value = lon.toFixed(4);
+        validationStartPixel = geoToPixel(lat, lon);
+        validationPickMode = 'target';
+    } else {
+        document.getElementById('validationTargetLat').value = lat.toFixed(4);
+        document.getElementById('validationTargetLon').value = lon.toFixed(4);
+        validationTargetPixel = geoToPixel(lat, lon);
+        validationPickMode = 'start';
+    }
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    setValidationStatus(`${sourceLabel || '地球点击'}已设置，当前等待设置${validationPickMode === 'start' ? '起点' : '终点'}。`);
+}
+
+function applyPixelToGeoInputs() {
+    if (validationStartPixel) {
+        const geo = pixelToGeo(validationStartPixel);
+        document.getElementById('validationStartLat').value = geo.lat.toFixed(4);
+        document.getElementById('validationStartLon').value = geo.lon.toFixed(4);
+    }
+    if (validationTargetPixel) {
+        const geo = pixelToGeo(validationTargetPixel);
+        document.getElementById('validationTargetLat').value = geo.lat.toFixed(4);
+        document.getElementById('validationTargetLon').value = geo.lon.toFixed(4);
+    }
+}
+
+function getValidationPointGeo(kind) {
+    const latId = kind === 'start' ? 'validationStartLat' : 'validationTargetLat';
+    const lonId = kind === 'start' ? 'validationStartLon' : 'validationTargetLon';
+    return {
+        lat: getNumericInputValue(latId, kind === 'start' ? 62.1 : 66.4),
+        lon: getNumericInputValue(lonId, kind === 'start' ? -28.5 : -8.5)
+    };
+}
+
+function clearRouteSelectionOnGlobe() {
+    if (originalRouteEntity && viewer.entities.contains(originalRouteEntity)) {
+        viewer.entities.remove(originalRouteEntity);
+    }
+    originalRouteEntity = null;
+    routeMarkerEntities.forEach(entity => {
+        if (viewer.entities.contains(entity)) viewer.entities.remove(entity);
+    });
+    routeMarkerEntities = [];
+}
+
+function addRoutePointMarker(kind, lon, lat) {
+    const isStart = kind === 'start';
+    routeMarkerEntities.push(viewer.entities.add({
+        name: isStart ? 'Start' : 'Target',
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 10000),
+        point: {
+            pixelSize: isStart ? 15 : 18,
+            color: isStart ? Cesium.Color.LIME : Cesium.Color.RED,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2
+        },
+        label: {
+            text: isStart ? '起点' : '终点',
+            font: 'bold 14px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, isStart ? -20 : -25)
+        }
+    }));
+}
+
+function updateRouteSelectionOnGlobe() {
+    if (!viewer) return;
+    clearRouteSelectionOnGlobe();
+    const hasStart = Boolean(validationStartPixel);
+    const hasTarget = Boolean(validationTargetPixel);
+    if (!hasStart && !hasTarget) return;
+
+    const start = hasStart ? getValidationPointGeo('start') : null;
+    const target = hasTarget ? getValidationPointGeo('target') : null;
+    if (hasStart && hasTarget) {
+        renderOriginalRoute([start.lon, start.lat], [target.lon, target.lat]);
+        return;
+    }
+    if (hasStart) addRoutePointMarker('start', start.lon, start.lat);
+    if (hasTarget) addRoutePointMarker('target', target.lon, target.lat);
+}
+
+function handleGlobeClick(click) {
+    const cartesian = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+    if (!cartesian) return;
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+    const lat = Cesium.Math.toDegrees(cartographic.latitude);
+    const lon = Cesium.Math.toDegrees(cartographic.longitude);
+    if (validationPickMode === 'center') {
+        document.getElementById('validationCenterLat').value = lat.toFixed(4);
+        document.getElementById('validationCenterLon').value = lon.toFixed(4);
+        if (currentScene) {
+            currentScene.config = currentScene.config || {};
+            currentScene.config.geo_center_lat = lat;
+            currentScene.config.geo_center_lon = lon;
+            renderCurrentSceneOnGlobe({flyTo:false});
+        }
+        setValidationStatus('火山中心已设置。现在可以导入或生成火山灰图。', 'success');
+        validationPickMode = 'start';
+        updateValidationPixelStatus();
+        return;
+    }
+    setFlightGeoPoint(validationPickMode, lat, lon, '地球点击');
+}
+
+function handleConvertedMapClick(event) {
+    if (!validationConvertedMap) {
+        setValidationStatus('请先转换现实图。', 'error');
+        return;
+    }
+    const img = event.currentTarget;
+    const rect = img.getBoundingClientRect();
+    const x = Math.round((event.clientX - rect.left) / Math.max(rect.width, 1) * validationConvertedMap.width);
+    const y = Math.round((event.clientY - rect.top) / Math.max(rect.height, 1) * validationConvertedMap.height);
+    const pixel = {
+        x: Math.max(0, Math.min(validationConvertedMap.width - 1, x)),
+        y: Math.max(0, Math.min(validationConvertedMap.height - 1, y))
+    };
+    setFlightPixelPoint(pixel, '标准图点击');
+}
+
+async function convertValidationImage() {
+    if (!validationImageFile) {
+        setValidationStatus('请先选择一张现实图。', 'error');
+        return;
+    }
+    const button = document.getElementById('convertValidationImageBtn');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '转换中...';
+    setValidationStatus('正在把现实图转换为标准火山灰浓度图...', 'busy');
+    try {
+        const formData = new FormData();
+        formData.append('image_file', validationImageFile);
+        formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
+        formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
+        formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 1.5))));
+        formData.append('image_size', JSON.stringify([
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
+        ]));
+        formData.append('config', JSON.stringify(buildValidationConfigPayload()));
+
+        const response = await fetch('/api/scenes/import-image', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '导入失败');
+        }
+        setCurrentScene(result.scene);
+        await refreshScenes();
+        setValidationStatus('火山灰场景已导入并加载到地球。可在地球上点击设置起点和终点。', 'success');
+    } catch (error) {
+        console.error('Image conversion failed:', error);
+        setValidationStatus(`导入失败：${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function setCurrentScene(scene) {
+    currentScene = scene;
+    currentSceneId = scene ? scene.scene_id : null;
+    if (!scene) {
+        validationConvertedMap = null;
+        updateValidationPixelStatus();
+        return;
+    }
+    const shape = scene.summary && scene.summary.shape ? scene.summary.shape : [768, 768];
+    validationConvertedMap = {
+        width: Number(shape[1]) || 768,
+        height: Number(shape[0]) || 768,
+        result: scene
+    };
+    const config = scene.config || {};
+    if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
+        document.getElementById('validationImageHeight').value = Math.round(Number(config.image_size[0]) || validationConvertedMap.height);
+        document.getElementById('validationImageWidth').value = Math.round(Number(config.image_size[1]) || validationConvertedMap.width);
+    }
+    if (Number.isFinite(Number(config.geo_center_lat))) document.getElementById('validationCenterLat').value = Number(config.geo_center_lat).toFixed(4);
+    if (Number.isFinite(Number(config.geo_center_lon))) document.getElementById('validationCenterLon').value = Number(config.geo_center_lon).toFixed(4);
+    if (Number.isFinite(Number(config.geo_span_lat))) document.getElementById('validationSpanLat').value = Number(config.geo_span_lat).toFixed(2);
+    if (Number.isFinite(Number(config.geo_span_lon))) document.getElementById('validationSpanLon').value = Number(config.geo_span_lon).toFixed(2);
+    if (scene.scene_name) document.getElementById('validationSceneName').value = scene.scene_name;
+    const previewUrl = scene.file_urls && scene.file_urls.preview_image;
+    const preview = document.getElementById('validationConvertedPreview');
+    if (previewUrl) {
+        preview.src = withCacheBust(previewUrl);
+        preview.style.display = 'block';
+    }
+    const sceneSelect = document.getElementById('sceneSelect');
+    if (sceneSelect) sceneSelect.value = currentSceneId || '';
+    updateValidationPixelStatus();
+    renderCurrentSceneOnGlobe({flyTo:true});
+}
+
+async function refreshScenes() {
+    try {
+        const response = await fetch('/api/scenes', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '场景列表加载失败');
+        savedScenes = result.scenes || [];
+        const select = document.getElementById('sceneSelect');
+        select.innerHTML = '';
+        if (savedScenes.length === 0) {
+            select.innerHTML = '<option value="">暂无场景</option>';
+            return;
+        }
+        savedScenes.forEach(scene => {
+            const option = document.createElement('option');
+            option.value = scene.scene_id;
+            option.textContent = `${scene.scene_name || scene.scene_id} | ${scene.created_at || ''}`;
+            select.appendChild(option);
+        });
+        if (currentSceneId) select.value = currentSceneId;
+    } catch (error) {
+        console.error('refreshScenes failed:', error);
+    }
+}
+
+async function loadSelectedScene() {
+    const sceneId = document.getElementById('sceneSelect').value;
+    if (!sceneId) return;
+    try {
+        const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '场景加载失败');
+        setCurrentScene(result.scene);
+        setValidationStatus('已载入保存的火山灰场景，并加载到地球。', 'success');
+    } catch (error) {
+        setValidationStatus(`场景加载失败：${error.message}`, 'error');
+    }
+}
+
+async function generateRandomScene() {
+    const button = document.getElementById('generateSceneBtn');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '生成中...';
+    setValidationStatus('正在生成随机火山灰场景...', 'busy');
+    try {
+        const payload = buildValidationConfigPayload();
+        payload.scene_name = document.getElementById('validationSceneName').value.trim() || 'generated_ash_scene';
+        payload.random_ash_scene = true;
+        payload.random_centers_range = [1, 6];
+        payload.seed = Date.now() % 1000000000;
+        const response = await fetch('/api/scenes/generated', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '生成失败');
+        setCurrentScene(result.scene);
+        await refreshScenes();
+        setValidationStatus('随机火山灰场景已生成并加载到地球。可设置起点终点后规划。', 'success');
+    } catch (error) {
+        setValidationStatus(`生成失败：${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function applySuggestedRoute() {
+    document.getElementById('validationCenterLat').value = '62.2005';
+    document.getElementById('validationCenterLon').value = '-18.5217';
+    document.getElementById('validationSpanLat').value = '8.00';
+    document.getElementById('validationSpanLon').value = '12.00';
+    document.getElementById('validationStartLat').value = '62.1000';
+    document.getElementById('validationStartLon').value = '-28.5000';
+    document.getElementById('validationTargetLat').value = '66.4000';
+    document.getElementById('validationTargetLon').value = '-8.5000';
+    validationStartPixel = geoToPixel(
+        getNumericInputValue('validationStartLat', 62.1),
+        getNumericInputValue('validationStartLon', -28.5)
+    );
+    validationTargetPixel = geoToPixel(
+        getNumericInputValue('validationTargetLat', 66.4),
+        getNumericInputValue('validationTargetLon', -8.5)
+    );
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    if (currentScene) renderCurrentSceneOnGlobe({flyTo:false});
+}
+
+function buildValidationConfigPayload() {
+    const payload = validationBaseConfig ? JSON.parse(JSON.stringify(validationBaseConfig)) : {};
+    payload.geo_center_lat = getNumericInputValue('validationCenterLat', 62.2005);
+    payload.geo_center_lon = getNumericInputValue('validationCenterLon', -18.5217);
+    payload.geo_span_lat = getNumericInputValue('validationSpanLat', 8.0);
+    payload.geo_span_lon = getNumericInputValue('validationSpanLon', 12.0);
+    payload.image_size = [
+        Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+        Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
+    ];
+    payload.concentration_threshold = getNumericInputValue('validationFallbackLimit', 0.3);
+    return payload;
+}
+
+function clearCloudLayerOnly() {
+    cloudEntities.forEach(entity => {
+        if (viewer.entities.contains(entity)) viewer.entities.remove(entity);
+    });
+    cloudEntities = [];
+    cloudAnimStartTime = null;
+    cloudBaseCoords = {};
+}
+
+function getSceneCloudInfo(scene) {
+    const config = scene.config || {};
+    if (scene.cloud_info && scene.cloud_info.center_lat !== undefined) {
+        return scene.cloud_info;
+    }
+
+    const summary = scene.summary || {};
+    const activeRatio = Number(summary.active_area_ratio || summary.danger_area_ratio || 0.08);
+    const spanLat = Number(config.geo_span_lat || 2.0);
+    const spanLon = Number(config.geo_span_lon || 2.0);
+    const approxRadius = Math.max(0.08, Math.sqrt(Math.max(activeRatio, 0.02) * spanLat * spanLon / Math.PI));
+    return {
+        center_lat: Number(config.geo_center_lat || 35.0),
+        center_lon: Number(config.geo_center_lon || 120.0),
+        zone_radii: {
+            safe: approxRadius * 1.15,
+            low: approxRadius * 0.85,
+            medium: approxRadius * 0.58,
+            high: approxRadius * 0.35
+        }
+    };
+}
+
+function renderSceneFootprint(scene) {
+    const config = scene.config || {};
+    const fileUrls = scene.file_urls || {};
+    const overlayUrl = fileUrls.overlay_image || null;
+    const centerLat = Number(config.geo_center_lat || currentCenterLat);
+    const centerLon = Number(config.geo_center_lon || currentCenterLon);
+    const spanLat = Number(config.geo_span_lat || 2.0);
+    const spanLon = Number(config.geo_span_lon || 2.0);
+    const west = centerLon - spanLon / 2;
+    const east = centerLon + spanLon / 2;
+    const south = centerLat - spanLat / 2;
+    const north = centerLat + spanLat / 2;
+    const material = overlayUrl
+        ? new Cesium.ImageMaterialProperty({
+            image: withCacheBust(overlayUrl),
+            transparent: true,
+            color: Cesium.Color.WHITE.withAlpha(0.88)
+        })
+        : Cesium.Color.CYAN.withAlpha(0.04);
+    cloudEntities.push(viewer.entities.add({
+        name: 'Scene Ash Overlay',
+        rectangle: {
+            coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
+            height: 9000,
+            material,
+            outline: true,
+            outlineColor: Cesium.Color.CYAN.withAlpha(0.75)
+        }
+    }));
+}
+
+function renderVolcanoCenterMarker(lon, lat) {
+    cloudEntities.push(viewer.entities.add({
+        name: 'Volcano Center',
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 10500),
+        point: {
+            pixelSize: 15,
+            color: Cesium.Color.BLACK,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2
+        },
+        label: {
+            text: '火山中心',
+            font: '12px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -20)
+        }
+    }));
+}
+
+function renderCurrentSceneOnGlobe(options = {}) {
+    if (!viewer || !currentScene) return;
+    const flyTo = options.flyTo === true;
+    clearCloudLayerOnly();
+    const cloudInfo = getSceneCloudInfo(currentScene);
+    currentCenterLat = Number(cloudInfo.center_lat || 35.0);
+    currentCenterLon = Number(cloudInfo.center_lon || 120.0);
+    renderSceneFootprint(currentScene);
+    const config = currentScene.config || {};
+    renderVolcanoCenterMarker(
+        Number(config.geo_center_lon || currentCenterLon),
+        Number(config.geo_center_lat || currentCenterLat)
+    );
+    updateRouteSelectionOnGlobe();
+    if (flyTo) {
+        setTimeout(() => zoomToCloud(), 250);
+    }
+}
+
+function updateValidationResultPanel(result) {
+    latestValidationResponse = result;
+
+    const card = document.getElementById('validationResultCard');
+    const pathData = result.path_data || {};
+    const validationInfo = pathData.validation_info || {};
+    const animationExport = result.animation_export || validationInfo.animation_export || {};
+
+    document.getElementById('validationCaseId').textContent = (result.case && result.case.case_id) || validationInfo.case_id || '--';
+    document.getElementById('validationMethod').textContent = pathData.planning_method || '--';
+    document.getElementById('validationFallback').textContent = validationInfo.used_fallback ? `已启用 (${validationInfo.fallback_reason || 'fallback'})` : '未启用';
+    document.getElementById('validationScene').textContent = pathData.scene_name || validationInfo.scene_name || '--';
+    document.getElementById('validationFrames').textContent = animationExport.frame_count || (result.animation_manifest && result.animation_manifest.frame_count) || '--';
+
+    setValidationLink('validationGifLink', result.animation_gif_url, '打开 GIF 动画');
+    setValidationLink('validationJsonLink', result.output_file_url, '打开验证 JSON');
+    setValidationLink('validationPlotLink', result.plot_file_url, '打开路径图');
+
+    const gifPreview = document.getElementById('validationGifPreview');
+    if (result.animation_gif_url) {
+        gifPreview.src = withCacheBust(result.animation_gif_url);
+        gifPreview.style.display = 'block';
+    } else {
+        gifPreview.removeAttribute('src');
+        gifPreview.style.display = 'none';
+    }
+
+    card.style.display = 'block';
+}
+
+async function runPlanningCase() {
+    if (!currentSceneId) {
+        setValidationStatus('请先导入、生成或选择一个火山灰场景。', 'error');
+        return;
+    }
+    const startGeo = getValidationPointGeo('start');
+    const targetGeo = getValidationPointGeo('target');
+    validationStartPixel = geoToPixel(
+        startGeo.lat,
+        startGeo.lon
+    );
+    validationTargetPixel = geoToPixel(
+        targetGeo.lat,
+        targetGeo.lon
+    );
+    updateValidationPixelStatus();
+    updateRouteSelectionOnGlobe();
+    if (!validationStartPixel || !validationTargetPixel) {
+        setValidationStatus('请先在地球或标准图上点击设置起点和终点。', 'error');
+        return;
+    }
+
+    const runButton = document.getElementById('runValidationBtn');
+    const saveButton = document.getElementById('saveCaseBtn');
+    const originalText = runButton.textContent;
+    runButton.disabled = true;
+    saveButton.disabled = true;
+    runButton.textContent = '规划中...';
+    setValidationStatus('正在规划航线并生成飞行动画...', 'busy');
+
+    try {
+        const payload = buildValidationConfigPayload();
+        payload.scene_id = currentSceneId;
+        payload.case_name = document.getElementById('validationSceneName').value.trim() || 'planning_case';
+        payload.start_position = [startGeo.lat, startGeo.lon];
+        payload.target_position = [targetGeo.lat, targetGeo.lon];
+        payload.planning_image_size = [1024, 1024];
+        payload.safety_factor = Number(document.getElementById('validationSafetyFactor').value);
+        payload.dynamic_ash = document.getElementById('validationDynamicAsh').value === 'true';
+        payload.prefer_fallback_planner = true;
+        payload.model_path = document.getElementById('validationModelPath').value.trim() || 'models/final_model.pth';
+        payload.fallback_concentration_limit = getNumericInputValue('validationFallbackLimit', 0.3);
+        payload.max_steps = Math.max(30, Math.round(getNumericInputValue('validationMaxSteps', 500)));
+        payload.animation_fps = Math.max(1, Math.round(getNumericInputValue('validationFps', 12)));
+        payload.animation_max_frames = Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)));
+
+        const response = await fetch('/api/cases/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '规划失败');
+        }
+
+        updateValidationResultPanel(result);
+        latestPlanningCase = result.case || null;
+        if (result.path_data) {
+            processData({
+                path_data: result.path_data,
+                cloud_info: result.path_data.cloud_info || null,
+                validation_info: result.path_data.validation_info || null
+            });
+            setTimeout(() => playSimulation(), 900);
+        }
+        await refreshCases();
+        saveButton.disabled = !latestPlanningCase;
+        setValidationStatus(result.message || '规划完成，飞机已开始播放，结果可保存和载入。', 'success');
+    } catch (error) {
+        console.error('Planning case failed:', error);
+        setValidationStatus(`规划失败：${error.message}`, 'error');
+    } finally {
+        runButton.disabled = false;
+        runButton.textContent = originalText;
+    }
+}
+
+async function saveLatestCase() {
+    if (!latestPlanningCase) {
+        setValidationStatus('当前还没有可保存的规划结果。', 'error');
+        return;
+    }
+    await refreshCases();
+    const select = document.getElementById('caseSelect');
+    if (select && latestPlanningCase.case_id) {
+        select.value = latestPlanningCase.case_id;
+    }
+    setValidationStatus(`当前结果已保存：${latestPlanningCase.case_id}`, 'success');
+}
+
+async function refreshCases() {
+    try {
+        const response = await fetch('/api/cases', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '案例列表加载失败');
+        savedCases = result.cases || [];
+        const select = document.getElementById('caseSelect');
+        select.innerHTML = '';
+        if (savedCases.length === 0) {
+            select.innerHTML = '<option value="">暂无结果</option>';
+            return;
+        }
+        savedCases.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.case_id;
+            option.textContent = `${item.case_name || item.case_id} | ${item.created_at || ''}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('refreshCases failed:', error);
+    }
+}
+
+async function loadSelectedCase() {
+    const caseId = document.getElementById('caseSelect').value;
+    if (!caseId) return;
+    try {
+        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}`, { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || '案例加载失败');
+        const item = result.case;
+        if (item.scene_id) {
+            currentSceneId = item.scene_id;
+        }
+        if (item.flight) {
+            validationStartPixel = item.flight.start_pixel
+                ? { x: Number(item.flight.start_pixel[0]), y: Number(item.flight.start_pixel[1]) }
+                : null;
+            validationTargetPixel = item.flight.target_pixel
+                ? { x: Number(item.flight.target_pixel[0]), y: Number(item.flight.target_pixel[1]) }
+                : null;
+            applyPixelToGeoInputs();
+        }
+        if (item.map) {
+            document.getElementById('validationImageHeight').value = item.map.image_size ? item.map.image_size[0] : 768;
+            document.getElementById('validationImageWidth').value = item.map.image_size ? item.map.image_size[1] : 768;
+            document.getElementById('validationCenterLat').value = Number(item.map.geo_center_lat || 35).toFixed(4);
+            document.getElementById('validationCenterLon').value = Number(item.map.geo_center_lon || 120).toFixed(4);
+            document.getElementById('validationSpanLat').value = Number(item.map.geo_span_lat || 2).toFixed(2);
+            document.getElementById('validationSpanLon').value = Number(item.map.geo_span_lon || 2).toFixed(2);
+        }
+        if (item.planning) {
+            document.getElementById('validationSafetyFactor').value = String(item.planning.safety_factor || 1.0);
+            document.getElementById('validationDynamicAsh').value = item.planning.dynamic_ash ? 'true' : 'false';
+            if (item.planning.model_path) document.getElementById('validationModelPath').value = item.planning.model_path;
+        }
+        const scenePreviewUrl = item.scene_file_urls && item.scene_file_urls.preview_image;
+        if (scenePreviewUrl) {
+            const preview = document.getElementById('validationConvertedPreview');
+            preview.src = withCacheBust(scenePreviewUrl);
+            preview.style.display = 'block';
+        }
+        validationConvertedMap = {
+            width: item.map && item.map.image_size ? Number(item.map.image_size[1]) : 768,
+            height: item.map && item.map.image_size ? Number(item.map.image_size[0]) : 768,
+            result: item
+        };
+        updateValidationPixelStatus();
+        updateValidationResultPanel({
+            case: item,
+            path_data: item.path_data,
+            animation_gif_url: item.output_urls && item.output_urls.animation_gif,
+            output_file_url: item.output_urls && item.output_urls.planned_path,
+            plot_file_url: item.output_urls && item.output_urls.path_plot
+        });
+        latestPlanningCase = item;
+        const saveButton = document.getElementById('saveCaseBtn');
+        if (saveButton) saveButton.disabled = false;
+        if (item.path_data) {
+            processData({
+                path_data: item.path_data,
+                cloud_info: item.path_data.cloud_info || null,
+                validation_info: item.path_data.validation_info || null
+            });
+        }
+        setValidationStatus('历史结果已载入，可直接播放或重新规划。', 'success');
+    } catch (error) {
+        setValidationStatus(`案例加载失败：${error.message}`, 'error');
+    }
+}
+
+async function runValidationFromImage() {
+    if (!validationImageFile) {
+        setValidationStatus('请先选择一张现实图。', 'error');
+        return;
+    }
+
+    const runButton = document.getElementById('runValidationBtn');
+    const originalText = runButton.textContent;
+    runButton.disabled = true;
+    runButton.textContent = '生成中...';
+    setValidationStatus('正在上传现实图并生成验证动画...', 'busy');
+
+    try {
+        const formData = new FormData();
+        formData.append('image_file', validationImageFile);
+        formData.append('web_request', 'true');
+        formData.append('scene_name', document.getElementById('validationSceneName').value.trim() || 'image_validation_scene');
+        formData.append('start_lat', String(getNumericInputValue('validationStartLat', 62.1)));
+        formData.append('start_lon', String(getNumericInputValue('validationStartLon', -28.5)));
+        formData.append('target_lat', String(getNumericInputValue('validationTargetLat', 66.4)));
+        formData.append('target_lon', String(getNumericInputValue('validationTargetLon', -8.5)));
+        formData.append('fallback_concentration_limit', String(getNumericInputValue('validationFallbackLimit', 0.3)));
+        formData.append('animation_fps', String(Math.max(1, Math.round(getNumericInputValue('validationFps', 12)))));
+        formData.append('animation_max_frames', String(Math.max(30, Math.round(getNumericInputValue('validationMaxFrames', 180)))));
+        formData.append('conversion_mode', document.getElementById('validationConversionMode').value);
+        formData.append('blur_kernel', String(Math.max(1, Math.round(getNumericInputValue('validationBlurKernel', 5)))));
+        formData.append('plume_scale', String(Math.max(0.5, getNumericInputValue('validationPlumeScale', 1.5))));
+        formData.append('image_size', JSON.stringify([
+            Math.max(1, Math.round(getNumericInputValue('validationImageHeight', 1024))),
+            Math.max(1, Math.round(getNumericInputValue('validationImageWidth', 1024)))
+        ]));
+        if (validationStartPixel && validationTargetPixel) {
+            formData.append('start_pixel', JSON.stringify([validationStartPixel.x, validationStartPixel.y]));
+            formData.append('target_pixel', JSON.stringify([validationTargetPixel.x, validationTargetPixel.y]));
+        }
+        formData.append('config', JSON.stringify(buildValidationConfigPayload()));
+
+        const response = await fetch('/api/validate-image', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || '验证失败');
+        }
+
+        updateValidationResultPanel(result);
+        if (result.path_data) {
+            processData({
+                path_data: result.path_data,
+                cloud_info: result.path_data.cloud_info || null,
+                validation_info: result.path_data.validation_info || null
+            });
+        }
+        setValidationStatus(result.message || '验证动画生成完成。', 'success');
+    } catch (error) {
+        console.error('Validation request failed:', error);
+        setValidationStatus(`验证失败：${error.message}`, 'error');
+    } finally {
+        runButton.disabled = false;
+        runButton.textContent = originalText;
+    }
+}
+
+function processData(raw) {
+    console.log('=== Processing new data ===');
+    console.log('Data structure:', Object.keys(raw));
+    clearAllData();
+
+    // 等待清理完成
+    setTimeout(() => {
+        console.log('Starting data processing after clear');
+        let data;
+        if (raw.path_data && raw.path_data.waypoints) {
+            console.log('Processing path_data format');
+            const waypoints = raw.path_data.waypoints;
+            console.log('Waypoints count:', waypoints.length);
+
+            if (waypoints.length === 0) {
+                console.error('No waypoints in data');
+                updateDataStatus('error', '数据无效');
+                return;
+            }
+
+            const startWp = waypoints[0];
+            const endWp = waypoints[waypoints.length - 1];
+            const lats = waypoints.map(w => w.latitude);
+            const lons = waypoints.map(w => w.longitude);
+
+            // 优先使用 cloud_info 中的精确云中心坐标，否则退回到路径边界框中点
+            if (raw.cloud_info && raw.cloud_info.center_lat !== undefined) {
+                currentCenterLat = raw.cloud_info.center_lat;
+                currentCenterLon = raw.cloud_info.center_lon;
+                console.log('Using cloud_info center:', currentCenterLon, currentCenterLat);
+            } else {
+                currentCenterLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                currentCenterLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+                console.log('Calculated center from bbox:', currentCenterLon, currentCenterLat);
+            }
+
+            console.log('Lat range:', Math.min(...lats), '-', Math.max(...lats));
+            console.log('Lon range:', Math.min(...lons), '-', Math.max(...lons));
+
+            trajectory = waypoints.map(wp => [wp.longitude, wp.latitude, 10000]);
+            concentrationAlongPath = waypoints.map(wp => wp.concentration || 0);
+            console.log('Trajectory created, length:', trajectory.length);
+            console.log('Concentration data length:', concentrationAlongPath.length);
+
+            renderCloudFromWaypoints(waypoints, currentCenterLon, currentCenterLat, raw.cloud_info);
+            renderOriginalRoute([startWp.longitude, startWp.latitude], [endWp.longitude, endWp.latitude]);
+            renderPlannedPath(trajectory);
+            createAircraft();
+            updateStats();
+            updateDataStatus('loaded', '已加载');
+
+            console.log('Loaded planning result without changing camera view');
+        } else if (raw.features || raw.planned_path) {
+            console.log('Processing alternative data format');
+            data = raw;
+            if (data.features && data.features.length > 0) {
+                renderScatterCloud(data.features, data.metadata);
+            }
+            if (data.original_route) {
+                renderOriginalRoute(data.original_route.start, data.original_route.end);
+            }
+            if (data.planned_path && data.planned_path.waypoints) {
+                const wps = data.planned_path.waypoints;
+                trajectory = wps.map(wp => [wp.longitude, wp.latitude, 10000]);
+                concentrationAlongPath = wps.map(wp => wp.concentration || 0);
+                renderPlannedPath(trajectory);
+                createAircraft();
+            }
+            if (data.metadata) {
+                currentCenterLon = data.metadata.center_lon || 120;
+                currentCenterLat = data.metadata.center_lat || 35;
+            }
+            updateStats();
+            updateDataStatus('loaded', '已加载');
+
+            console.log('Loaded data without changing camera view');
+        } else {
+            console.error('Unknown data format, available keys:', Object.keys(raw));
+            updateDataStatus('error', '格式错误');
+        }
+    }, 150);
+}
+
+function renderCloudFromWaypoints(waypoints, centerLon, centerLat, cloudInfo) {
+    console.log('Rendering cloud from waypoints, center:', centerLon, centerLat);
+
+    if (currentScene && currentScene.file_urls && currentScene.file_urls.overlay_image) {
+        renderSceneFootprint(currentScene);
+        const config = currentScene.config || {};
+        renderVolcanoCenterMarker(
+            Number(config.geo_center_lon || centerLon),
+            Number(config.geo_center_lat || centerLat)
+        );
+        return;
+    }
+
+    // 若 JSON 中包含精确计算的区域半径则使用之，否则使用合理的默认值
+    const zr = (cloudInfo && cloudInfo.zone_radii) ? cloudInfo.zone_radii : {};
+    const zoneRadii = { safe: zr.safe || 0.58, low: zr.low || 0.46, medium: zr.medium || 0.37, high: zr.high || 0.30 };
+    console.log('Zone radii (deg):', cloudZoneOrder.map(level => level + ':' + zoneRadii[level].toFixed(3)));
+    createDynamicCloudLayers(centerLon, centerLat, zoneRadii, 42, 0.6, 0.025, 0.00010, 72);
+
+    renderVolcanoCenterMarker(centerLon, centerLat);
+}
+
+function renderScatterCloud(features, metadata) {
+    const centerLon = metadata ? metadata.center_lon : 120;
+    const centerLat = metadata ? metadata.center_lat : 35;
+
+    features.forEach(feature => {
+        const conc = feature.properties.concentration;
+        let color;
+        if (conc < 0.2) color = Cesium.Color.GREEN.withAlpha(0.5);
+        else if (conc < 0.5) color = Cesium.Color.YELLOW.withAlpha(0.6);
+        else if (conc < 0.8) color = Cesium.Color.ORANGE.withAlpha(0.7);
+        else color = Cesium.Color.RED.withAlpha(0.8);
+
+        const entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(
+                feature.geometry.coordinates[0],
+                feature.geometry.coordinates[1],
+                10000
+            ),
+            point: { pixelSize: 4 + conc * 6, color: color }
+        });
+        cloudEntities.push(entity);
+    });
+}
+
+function renderOriginalRoute(start, target) {
+    console.log('Rendering original route from', start, 'to', target);
+    originalRouteEntity = null;
+
+    routeMarkerEntities.push(viewer.entities.add({
+        name: 'Start',
+        position: Cesium.Cartesian3.fromDegrees(start[0], start[1], 10000),
+        point: { pixelSize: 15, color: Cesium.Color.GREEN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '起点', font: 'bold 14px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -20) }
+    }));
+
+    routeMarkerEntities.push(viewer.entities.add({
+        name: 'Target',
+        position: Cesium.Cartesian3.fromDegrees(target[0], target[1], 10000),
+        point: { pixelSize: 18, color: Cesium.Color.RED, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '终点', font: 'bold 14px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -25) }
+    }));
+}
+
+function renderPlannedPath(trajectory) {
+    console.log('Rendering planned path, trajectory length:', trajectory ? trajectory.length : 0);
+    if (!trajectory || trajectory.length < 2) {
+        console.warn('Trajectory is empty or too short');
+        return;
+    }
+
+    plannedPathEntity = viewer.entities.add({
+        name: '规划路径',
+        polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(
+                trajectory.flatMap(point => [point[0], point[1], point[2] || 10000])
+            ),
+            width: 3,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                color: Cesium.Color.LIME.withAlpha(0.78),
+                glowPower: 0.12
+            }),
+            clampToGround: false
+        }
+    });
+
+    flownTraceEntity = viewer.entities.add({
+        name: '已飞轨迹',
+        polyline: {
+            positions: new Cesium.CallbackProperty(() => {
+                if (!trajectory || trajectory.length === 0) return [];
+                const cappedIndex = Math.max(0, Math.min(Math.floor(currentIndex), trajectory.length - 1));
+                const positions = [];
+                for (let i = 0; i <= cappedIndex; i++) {
+                    positions.push(trajectory[i][0], trajectory[i][1], (trajectory[i][2] || 10000) + 250);
+                }
+                if (positions.length === 3) {
+                    positions.push(trajectory[0][0], trajectory[0][1], (trajectory[0][2] || 10000) + 250);
+                }
+                return Cesium.Cartesian3.fromDegreesArrayHeights(positions);
+            }, false),
+            width: 5,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                color: Cesium.Color.CYAN,
+                glowPower: 0.22
+            }),
+            clampToGround: false
+        }
+    });
+
+    for (let i = 0; i < trajectory.length; i += 10) {
+        const wp = viewer.entities.add({
+            name: `WP${i}`,
+            position: Cesium.Cartesian3.fromDegrees(trajectory[i][0], trajectory[i][1], trajectory[i][2] || 10000),
+            point: { pixelSize: 6, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.LIME, outlineWidth: 2 }
+        });
+        wp.pathStepIndex = i;
+        wp.show = false;
+        waypointEntities.push(wp);
+    }
+    updatePlannedPathProgress(0);
+}
+
+function updatePlannedPathProgress(index) {
+    const cappedIndex = Math.max(0, Math.min(Math.floor(index), trajectory.length - 1));
+    waypointEntities.forEach(entity => {
+        entity.show = plannedPathVisible && entity.pathStepIndex <= cappedIndex;
+    });
+}
+
+function createAircraft() {
+    console.log('Creating aircraft, trajectory length:', trajectory ? trajectory.length : 0);
+    if (aircraftEntity) {
+        console.log('Removing existing aircraft');
+        if (viewer.entities.contains(aircraftEntity)) {
+            viewer.entities.remove(aircraftEntity);
+        }
+    }
+    if (!trajectory || trajectory.length === 0) {
+        console.warn('Cannot create aircraft: no trajectory');
+        return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#00FFFF'; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(16, 2); ctx.lineTo(6, 28); ctx.lineTo(16, 22); ctx.lineTo(26, 28);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    aircraftEntity = viewer.entities.add({
+        name: 'Aircraft',
+        position: Cesium.Cartesian3.fromDegrees(trajectory[0][0], trajectory[0][1], trajectory[0][2] || 10000),
+        billboard: { image: canvas, scale: 1.0 },
+        point: { pixelSize: 12, color: Cesium.Color.CYAN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: { text: '✈ 飞机', font: '12px sans-serif', fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -15) }
+    });
+}
+
+function playSimulation() {
+    if (!trajectory || trajectory.length === 0) return;
+    if (isPlaying) return;
+    isPlaying = true;
+    animate();
+}
+
+function pauseSimulation() {
+    isPlaying = false;
+    if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+}
+
+function resetSimulation() {
+    pauseSimulation();
+    currentIndex = 0;
+    updatePosition(0);
+    updateProgressUI(0);
+}
+
+function setSpeed(val) {
+    speed = parseFloat(val);
+    document.getElementById('speedValue').textContent = speed.toFixed(1);
+}
+
+function seekTo(val) {
+    if (!trajectory || trajectory.length === 0) return;
+    const progress = parseFloat(val) / 100;
+    currentIndex = Math.floor(progress * (trajectory.length - 1));
+    updatePosition(currentIndex);
+    updateProgressUI(progress * 100);
+}
+
+function animate() {
+    if (!isPlaying) return;
+    currentIndex += speed * 0.5;
+
+    if (currentIndex >= trajectory.length - 1) {
+        currentIndex = trajectory.length - 1;
+        isPlaying = false;
+        updatePosition(Math.floor(currentIndex));
+        updateProgressUI(100);
+        document.getElementById('flightProgress').textContent = '100.0%';
+        return;
+    }
+
+    updatePosition(Math.floor(currentIndex));
+
+    const progress = (currentIndex / (trajectory.length - 1)) * 100;
+    updateProgressUI(progress);
+
+    if (isPlaying) animationId = requestAnimationFrame(() => animate());
+}
+
+function updatePosition(index) {
+    if (!aircraftEntity || !trajectory) return;
+    index = Math.max(0, Math.min(index, trajectory.length - 1));
+    const pos = trajectory[index];
+    aircraftEntity.position = Cesium.Cartesian3.fromDegrees(pos[0], pos[1], pos[2] || 10000);
+    updatePlannedPathProgress(index);
+
+    let spd = 0;
+    if (index < trajectory.length - 1) {
+        const next = trajectory[index + 1];
+        const dx = (next[0] - pos[0]) * 111000 * Math.cos(pos[1] * Math.PI / 180);
+        const dy = (next[1] - pos[1]) * 111000;
+        spd = Math.sqrt(dx * dx + dy * dy) / 10;
+    }
+
+    let conc = '--';
+    if (concentrationAlongPath && index < concentrationAlongPath.length) {
+        const c = Number(concentrationAlongPath[index]);
+        if (Number.isFinite(c)) {
+            // 如果浓度非常小，使用科学计数法；否则使用4位小数
+            conc = (c < 0.0001 && c > 0) ? c.toExponential(2) : c.toFixed(4);
+        }
+    }
+
+    const prog = ((index / (trajectory.length - 1)) * 100).toFixed(1);
+
+    document.getElementById('positionInfo').textContent = `${pos[0].toFixed(4)}°, ${pos[1].toFixed(4)}°`;
+    document.getElementById('altitudeInfo').textContent = `${(pos[2] || 10000).toFixed(0)} m`;
+    document.getElementById('speedInfo').textContent = `${spd.toFixed(1)} m/s`;
+    document.getElementById('concentrationInfo').textContent = String(conc);
+    document.getElementById('flightProgress').textContent = `${prog}%`;
+}
+
+function updateProgressUI(percent) {
+    const p = Math.min(100, Math.max(0, percent)).toFixed(0);
+    document.getElementById('progressSlider').value = p;
+    document.getElementById('progressValue').textContent = `${p}%`;
+}
+
+function toggleCloud(show) {
+    cloudEntities.forEach(e => e.show = show);
+}
+
+function toggleOriginalRoute(show) {
+    if (originalRouteEntity) originalRouteEntity.show = show;
+    routeMarkerEntities.forEach(e => e.show = show);
+}
+
+function togglePlannedPath(show) {
+    plannedPathVisible = show;
+    if (plannedPathEntity) plannedPathEntity.show = show;
+    if (flownTraceEntity) flownTraceEntity.show = show;
+    updatePlannedPathProgress(currentIndex);
+}
+
+function toggleAircraft(show) {
+    if (aircraftEntity) aircraftEntity.show = show;
+}
+
+function viewOverhead() {
+    if (!Number.isFinite(currentCenterLon) || !Number.isFinite(currentCenterLat)) {
+        console.error('Invalid center coordinates for overhead view');
+        return;
+    }
+
+    viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 500000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+        duration: 1.5
+    });
+}
+
+function viewFollow() {
+    if (aircraftEntity) viewer.trackedEntity = aircraftEntity;
+}
+
+function viewFree() {
+    viewer.trackedEntity = undefined;
+}
+
+function zoomToCloud() {
+    // 验证坐标是否有效
+    if (!Number.isFinite(currentCenterLon) || !Number.isFinite(currentCenterLat)) {
+        console.error('Invalid center coordinates:', currentCenterLon, currentCenterLat);
+        return;
+    }
+
+    console.log('Executing zoomToCloud with coordinates:', currentCenterLon, currentCenterLat);
+
+    try {
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 500000),
+            orientation: { heading: 0, pitch: Cesium.Math.toRadians(-60), roll: 0 },
+            duration: 2
+        });
+    } catch (error) {
+        console.error('Error in zoomToCloud:', error);
+    }
+}
+
+function clearAllData() {
+    console.log('=== Clearing all data ===');
+    pauseSimulation();
+
+    // 清除跟踪模式
+    if (viewer.trackedEntity) {
+        viewer.trackedEntity = undefined;
+        console.log('Cleared tracked entity');
+    }
+
+    // 清除所有实体
+    console.log('Clearing cloud entities:', cloudEntities.length);
+    cloudEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    cloudEntities = [];
+
+    if (originalRouteEntity) {
+        console.log('Clearing original route');
+        if (viewer.entities.contains(originalRouteEntity)) {
+            viewer.entities.remove(originalRouteEntity);
+        }
+        originalRouteEntity = null;
+    }
+
+    routeMarkerEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    routeMarkerEntities = [];
+
+    if (plannedPathEntity) {
+        console.log('Clearing planned path');
+        if (viewer.entities.contains(plannedPathEntity)) {
+            viewer.entities.remove(plannedPathEntity);
+        }
+        plannedPathEntity = null;
+    }
+
+    if (flownTraceEntity) {
+        if (viewer.entities.contains(flownTraceEntity)) {
+            viewer.entities.remove(flownTraceEntity);
+        }
+        flownTraceEntity = null;
+    }
+
+    console.log('Clearing waypoint entities:', waypointEntities.length);
+    waypointEntities.forEach(e => {
+        if (viewer.entities.contains(e)) {
+            viewer.entities.remove(e);
+        }
+    });
+    waypointEntities = [];
+
+    if (aircraftEntity) {
+        console.log('Clearing aircraft');
+        if (viewer.entities.contains(aircraftEntity)) {
+            viewer.entities.remove(aircraftEntity);
+        }
+        aircraftEntity = null;
+    }
+
+    // 重置数据
+    trajectory = [];
+    concentrationAlongPath = [];
+    currentIndex = 0;
+    plannedPathVisible = true;
+
+    // 重置坐标中心为默认值
+    currentCenterLon = 120;
+    currentCenterLat = 35;
+
+    // 重置动态云状态
+    cloudAnimStartTime = null;
+    cloudBaseCoords = {};
+    console.log('Reset center to default:', currentCenterLon, currentCenterLat);
+
+    // 重置UI
+    document.getElementById('positionInfo').textContent = '--';
+    document.getElementById('altitudeInfo').textContent = '--';
+    document.getElementById('speedInfo').textContent = '--';
+    document.getElementById('concentrationInfo').textContent = '--';
+    document.getElementById('flightProgress').textContent = '--';
+    document.getElementById('statDistance').textContent = '--';
+    document.getElementById('statMaxConc').textContent = '--';
+    document.getElementById('statDeviation').textContent = '--';
+    updateProgressUI(0);
+    updateDataStatus('', '未加载');
+
+    console.log('=== Clear complete, total entities:', viewer.entities.values.length);
+}
+
+function loadSampleData() {
+    console.log('Loading sample data...');
+    clearAllData();
+
+    setTimeout(() => {
+        // 云团中心：东海（日本九州岛西侧，模拟樱岛火山灰扩散场景）
+        currentCenterLon = 130.5;
+        currentCenterLat = 31.5;
+
+        console.log('Sample data center:', currentCenterLon, currentCenterLat);
+
+        // 不规则云形，4层危险区域，半径扩大以增强视觉效果
+        const zoneRadii = { safe: 3.8, low: 2.7, medium: 1.8, high: 0.9 };
+        createDynamicCloudLayers(currentCenterLon, currentCenterLat, zoneRadii, 42, 0.5, 0.04, 0.00012, 80);
+
+        // 火山中心标记（固定不动，只有灰云随风漂移）
+        cloudEntities.push(viewer.entities.add({
+            name: 'Volcano Center',
+            position: Cesium.Cartesian3.fromDegrees(currentCenterLon, currentCenterLat, 10650),
+            point: { pixelSize: 14, color: Cesium.Color.BLACK, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+            label: { text: '火山中心', font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+                     style: Cesium.LabelStyle.FILL_AND_OUTLINE, outlineWidth: 2,
+                     verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -22) }
+        }));
+
+        // ── 规划路径 ──
+        // 起点：台湾海峡北侧 → 终点：日本本州南岸
+        // 直飞路线会穿越火山灰核心区，规划路径绕北侧走，经过绿色安全区边缘
+        const startLon = 119.0, startLat = 26.5;
+        const endLon   = 140.5, endLat   = 34.0;
+        const cLon = currentCenterLon, cLat = currentCenterLat;
+
+        trajectory = [];
+        concentrationAlongPath = [];
+        const N = 150;
+
+        for (let i = 0; i <= N; i++) {
+            const t = i / N;
+
+            // 基准直线
+            const baseLon = startLon + (endLon - startLon) * t;
+            const baseLat = startLat + (endLat - startLat) * t;
+
+            // 规避鼓包：模拟"进入外层→察觉危险→急转北侧→绕行→恢复航线"全过程
+            // 双峰高斯：前峰较高（主动规避），后峰较宽（恢复过渡），路径经过外层绿色区
+            const bump1 = Math.exp(-Math.pow((t - 0.40) * 7.5, 2));
+            const bump2 = Math.exp(-Math.pow((t - 0.52) * 8.0, 2));
+            const avoidLat = 2.4 * bump1 + 1.6 * bump2;
+
+            // 东西向适度抖动：模拟飞行员多次调整航向，路径更真实
+            const jitterLon = 0.35 * Math.sin(t * Math.PI * 4.0) * Math.exp(-Math.pow((t - 0.45) * 3.5, 2));
+
+            const lon = baseLon + jitterLon;
+            const lat = baseLat + avoidLat;
+
+            // 浓度：基于到云中心的椭圆距离（风向拉伸）计算
+            const dLon = (lon - cLon) / 1.28;
+            const dLat = (lat - cLat) / 0.82;
+            const dist  = Math.sqrt(dLon * dLon + dLat * dLat);
+            // 高斯衰减：中心=1，green区边缘(dist≈3.8°)对应低浓度，路径最近处约0.08~0.13
+            const conc = Math.max(0, Math.exp(-Math.pow(dist / 1.85, 2)));
+
+            trajectory.push([lon, lat, 10000]);
+            concentrationAlongPath.push(conc.toFixed(4));
+        }
+
+        renderOriginalRoute([startLon, startLat], [endLon, endLat]);
+        renderPlannedPath(trajectory);
+        createAircraft();
+        updateStats();
+        updateDataStatus('loaded', '示例数据');
+
+        setTimeout(() => {
+            console.log('Zooming to sample cloud at:', currentCenterLon, currentCenterLat);
+            zoomToCloud();
+        }, 500);
+    }, 100);
+}
+
+function updateStats() {
+    if (!trajectory || trajectory.length < 2) return;
+    let dist = 0;
+    for (let i = 1; i < trajectory.length; i++) {
+        const p1 = trajectory[i - 1], p2 = trajectory[i];
+        const dx = (p2[0] - p1[0]) * 111 * Math.cos(p1[1] * Math.PI / 180);
+        const dy = (p2[1] - p1[1]) * 111;
+        dist += Math.sqrt(dx * dx + dy * dy);
+    }
+    const directDist = Math.sqrt(
+        Math.pow((trajectory[trajectory.length - 1][0] - trajectory[0][0]) * 111, 2) +
+        Math.pow((trajectory[trajectory.length - 1][1] - trajectory[0][1]) * 111, 2)
+    );
+
+    let maxConc = 0;
+    concentrationAlongPath.forEach(c => { const n = Number(c); if (Number.isFinite(n) && n > maxConc) maxConc = n; });
+
+    document.getElementById('statDistance').textContent = `${dist.toFixed(1)} km`;
+    // 如果浓度非常小，使用科学计数法
+    const maxConcText = maxConc > 0 ? ((maxConc < 0.0001) ? maxConc.toExponential(2) : maxConc.toFixed(4)) : '--';
+    document.getElementById('statMaxConc').textContent = maxConcText;
+    document.getElementById('statDeviation').textContent = `${(dist - directDist).toFixed(1)} km`;
+}
+
+function updateDataStatus(status, text) {
+    const el = document.getElementById('dataStatus');
+    el.textContent = text;
+    el.className = status;
+}
+
+async function loadValidationDefaults() {
+    try {
+        const response = await fetch('/api/output/current_config.json', { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const config = await response.json();
+        validationBaseConfig = config;
+
+        document.getElementById('validationSceneName').value = '冰岛火山灰测试';
+        document.getElementById('validationCenterLat').value = '62.2005';
+        document.getElementById('validationCenterLon').value = '-18.5217';
+        document.getElementById('validationSpanLat').value = '8.00';
+        document.getElementById('validationSpanLon').value = '12.00';
+        if (Array.isArray(config.image_size) && config.image_size.length >= 2) {
+            document.getElementById('validationImageHeight').value = Math.max(1024, Math.round(Number(config.image_size[0]) || 1024));
+            document.getElementById('validationImageWidth').value = Math.max(1024, Math.round(Number(config.image_size[1]) || 1024));
+        }
+        if (Number.isFinite(Number(config.concentration_threshold))) {
+            document.getElementById('validationFallbackLimit').value = Number(config.concentration_threshold).toFixed(2);
+        }
+        applySuggestedRoute();
+    } catch (error) {
+        validationBaseConfig = null;
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (window.location.protocol === 'file:') {
+        alert('请先运行 server.py，然后在浏览器打开 http://127.0.0.1:5050。直接打开 web/index.html 只是静态文件，无法使用导入、生成和规划接口。');
+        setValidationStatus('当前是静态文件模式。请运行 server.py 后访问 http://127.0.0.1:5050。', 'error');
+    }
+    initCesium();
+    applySuggestedRoute();
+    loadValidationDefaults();
+    refreshScenes();
+    refreshCases();
+});
+
+window.addEventListener('resize', () => {
+    if (viewer) viewer.resize();
+});

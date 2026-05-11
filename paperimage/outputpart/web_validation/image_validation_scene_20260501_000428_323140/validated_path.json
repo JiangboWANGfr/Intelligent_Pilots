@@ -1,0 +1,3316 @@
+{
+  "planning_info": {
+    "timestamp": "2026-05-01 00:04:56.924035",
+    "success": true,
+    "planning_method": "fallback",
+    "scene_name": "单中心模型_规则",
+    "total_waypoints": 160,
+    "total_steps": 160,
+    "summary": {
+      "total_reward": -32.67320163798169,
+      "total_fuel_consumption": 26.664513873649483,
+      "max_concentration_exposure": 0.018317796289920807
+    }
+  },
+  "path_data": {
+    "waypoints": [
+      {
+        "step": 0,
+        "pixel_x": 76.0,
+        "pixel_y": 435.0,
+        "latitude": -39.9477140625,
+        "longitude": -72.46154375,
+        "velocity_x": 0.0,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -0.1017998531460762,
+        "cumulative_fuel": 0.0
+      },
+      {
+        "step": 1,
+        "pixel_x": 79.46804809570312,
+        "pixel_y": 430.2750549316406,
+        "latitude": -39.933065625,
+        "longitude": -72.4527546875,
+        "velocity_x": 3.468048095703125,
+        "velocity_y": -4.724945068359375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -1.2585972499751727,
+        "cumulative_fuel": 0.19033316957886803
+      },
+      {
+        "step": 2,
+        "pixel_x": 80.0744400024414,
+        "pixel_y": 428.5135803222656,
+        "latitude": -39.9301359375,
+        "longitude": -72.449825,
+        "velocity_x": 0.6063919067382812,
+        "velocity_y": -1.761474609375,
+        "concentration": 0.0,
+        "cumulative_reward": -1.5939244450944892,
+        "cumulative_fuel": 0.3326883159201558
+      },
+      {
+        "step": 3,
+        "pixel_x": 81.37443542480469,
+        "pixel_y": 425.00616455078125,
+        "latitude": -39.9184171875,
+        "longitude": -72.4468953125,
+        "velocity_x": 1.2999954223632812,
+        "velocity_y": -3.507415771484375,
+        "concentration": 0.0,
+        "cumulative_reward": -2.2672292001259824,
+        "cumulative_fuel": 0.497575299588922
+      },
+      {
+        "step": 4,
+        "pixel_x": 82.22039794921875,
+        "pixel_y": 421.35186767578125,
+        "latitude": -39.9066984375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.8459625244140625,
+        "velocity_y": -3.654296875,
+        "concentration": 0.0,
+        "cumulative_reward": -2.942398096835886,
+        "cumulative_fuel": 0.6625865593695822
+      },
+      {
+        "step": 5,
+        "pixel_x": 82.5,
+        "pixel_y": 417.4629821777344,
+        "latitude": -39.8949796875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.27960205078125,
+        "velocity_y": -3.888885498046875,
+        "concentration": 0.0,
+        "cumulative_reward": -3.6442044021997946,
+        "cumulative_fuel": 0.8293736463938428
+      },
+      {
+        "step": 6,
+        "pixel_x": 82.5,
+        "pixel_y": 413.458251953125,
+        "latitude": -39.8832609375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -4.466855695775559,
+        "cumulative_fuel": 0.9974304090891553
+      },
+      {
+        "step": 7,
+        "pixel_x": 82.5,
+        "pixel_y": 409.45355224609375,
+        "latitude": -39.8715421875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -5.28950149618726,
+        "cumulative_fuel": 1.1654868055735301
+      },
+      {
+        "step": 8,
+        "pixel_x": 82.5,
+        "pixel_y": 405.44879150390625,
+        "latitude": -39.8598234375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047607421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -6.112158282927086,
+        "cumulative_fuel": 1.3335439344797801
+      },
+      {
+        "step": 9,
+        "pixel_x": 82.5,
+        "pixel_y": 401.444091796875,
+        "latitude": -39.8481046875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -6.934804083338787,
+        "cumulative_fuel": 1.501600330964155
+      },
+      {
+        "step": 10,
+        "pixel_x": 82.5,
+        "pixel_y": 397.43939208984375,
+        "latitude": -39.8363859375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -7.757449883750488,
+        "cumulative_fuel": 1.66965672744853
+      },
+      {
+        "step": 11,
+        "pixel_x": 82.5,
+        "pixel_y": 393.4346618652344,
+        "latitude": -39.8246671875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -8.580101177326252,
+        "cumulative_fuel": 1.8377134901438426
+      },
+      {
+        "step": 12,
+        "pixel_x": 82.5,
+        "pixel_y": 389.4299621582031,
+        "latitude": -39.8129484375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -9.402746977737953,
+        "cumulative_fuel": 2.0057698866282174
+      },
+      {
+        "step": 13,
+        "pixel_x": 82.5,
+        "pixel_y": 385.42523193359375,
+        "latitude": -39.8012296875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -10.225398271313717,
+        "cumulative_fuel": 2.17382664932353
+      },
+      {
+        "step": 14,
+        "pixel_x": 82.5,
+        "pixel_y": 381.4205017089844,
+        "latitude": -39.7895109375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -11.04804956488948,
+        "cumulative_fuel": 2.3418834120188428
+      },
+      {
+        "step": 15,
+        "pixel_x": 82.5,
+        "pixel_y": 377.4158020019531,
+        "latitude": -39.7777921875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -11.87069536530118,
+        "cumulative_fuel": 2.509939808503218
+      },
+      {
+        "step": 16,
+        "pixel_x": 82.5,
+        "pixel_y": 373.41107177734375,
+        "latitude": -39.7660734375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -12.693346658876944,
+        "cumulative_fuel": 2.6779965711985305
+      },
+      {
+        "step": 17,
+        "pixel_x": 82.5,
+        "pixel_y": 369.4063415527344,
+        "latitude": -39.7543546875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -13.515997952452707,
+        "cumulative_fuel": 2.846053333893843
+      },
+      {
+        "step": 18,
+        "pixel_x": 82.5,
+        "pixel_y": 365.4016418457031,
+        "latitude": -39.7426359375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -14.338643752864408,
+        "cumulative_fuel": 3.0141097303782183
+      },
+      {
+        "step": 19,
+        "pixel_x": 82.5,
+        "pixel_y": 361.39691162109375,
+        "latitude": -39.7309171875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -15.161295046440172,
+        "cumulative_fuel": 3.182166493073531
+      },
+      {
+        "step": 20,
+        "pixel_x": 82.5,
+        "pixel_y": 357.3922119140625,
+        "latitude": -39.7191984375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -15.983940846851873,
+        "cumulative_fuel": 3.350222889557906
+      },
+      {
+        "step": 21,
+        "pixel_x": 82.5,
+        "pixel_y": 353.38751220703125,
+        "latitude": -39.7074796875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -16.806586647263575,
+        "cumulative_fuel": 3.518279286042281
+      },
+      {
+        "step": 22,
+        "pixel_x": 82.5,
+        "pixel_y": 349.38275146484375,
+        "latitude": -39.6957609375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047607421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -17.629243434003403,
+        "cumulative_fuel": 3.686336414948531
+      },
+      {
+        "step": 23,
+        "pixel_x": 82.5,
+        "pixel_y": 345.3780822753906,
+        "latitude": -39.6840421875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004669189453125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -18.45188374125104,
+        "cumulative_fuel": 3.8543924452219684
+      },
+      {
+        "step": 24,
+        "pixel_x": 82.5,
+        "pixel_y": 341.37335205078125,
+        "latitude": -39.6723234375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -19.274535034826805,
+        "cumulative_fuel": 4.022449207917281
+      },
+      {
+        "step": 25,
+        "pixel_x": 82.5,
+        "pixel_y": 337.36859130859375,
+        "latitude": -39.6606046875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047607421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -20.097191821566632,
+        "cumulative_fuel": 4.190506336823531
+      },
+      {
+        "step": 26,
+        "pixel_x": 82.5,
+        "pixel_y": 333.3639221191406,
+        "latitude": -39.6488859375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004669189453125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -20.91983212881427,
+        "cumulative_fuel": 4.358562367096968
+      },
+      {
+        "step": 27,
+        "pixel_x": 82.5,
+        "pixel_y": 329.35919189453125,
+        "latitude": -39.6371671875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -21.742483422390034,
+        "cumulative_fuel": 4.52661912979228
+      },
+      {
+        "step": 28,
+        "pixel_x": 82.5,
+        "pixel_y": 325.3544921875,
+        "latitude": -39.6254484375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -22.565129222801737,
+        "cumulative_fuel": 4.694675526276655
+      },
+      {
+        "step": 29,
+        "pixel_x": 82.5,
+        "pixel_y": 321.3497619628906,
+        "latitude": -39.6137296875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -23.3877805163775,
+        "cumulative_fuel": 4.8627322889719675
+      },
+      {
+        "step": 30,
+        "pixel_x": 82.5,
+        "pixel_y": 317.34503173828125,
+        "latitude": -39.6020109375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -24.210431809953263,
+        "cumulative_fuel": 5.03078905166728
+      },
+      {
+        "step": 31,
+        "pixel_x": 82.5,
+        "pixel_y": 313.34033203125,
+        "latitude": -39.5902921875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -25.033077610364966,
+        "cumulative_fuel": 5.198845448151655
+      },
+      {
+        "step": 32,
+        "pixel_x": 82.5,
+        "pixel_y": 309.33563232421875,
+        "latitude": -39.5785734375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -25.85572341077667,
+        "cumulative_fuel": 5.36690184463603
+      },
+      {
+        "step": 33,
+        "pixel_x": 82.5,
+        "pixel_y": 305.3309020996094,
+        "latitude": -39.5668546875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -26.678374704352432,
+        "cumulative_fuel": 5.534958607331342
+      },
+      {
+        "step": 34,
+        "pixel_x": 82.5,
+        "pixel_y": 301.3262023925781,
+        "latitude": -39.5551359375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -27.501020504764135,
+        "cumulative_fuel": 5.703015003815717
+      },
+      {
+        "step": 35,
+        "pixel_x": 82.5,
+        "pixel_y": 297.32147216796875,
+        "latitude": -39.5434171875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -28.3236717983399,
+        "cumulative_fuel": 5.8710717665110295
+      },
+      {
+        "step": 36,
+        "pixel_x": 82.5,
+        "pixel_y": 293.3167419433594,
+        "latitude": -39.5316984375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -29.14632309191566,
+        "cumulative_fuel": 6.039128529206342
+      },
+      {
+        "step": 37,
+        "pixel_x": 82.5,
+        "pixel_y": 289.3120422363281,
+        "latitude": -39.5199796875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -29.968968892327364,
+        "cumulative_fuel": 6.207184925690717
+      },
+      {
+        "step": 38,
+        "pixel_x": 82.5,
+        "pixel_y": 285.30731201171875,
+        "latitude": -39.5082609375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -30.791620185903128,
+        "cumulative_fuel": 6.375241688386029
+      },
+      {
+        "step": 39,
+        "pixel_x": 82.5,
+        "pixel_y": 281.3025817871094,
+        "latitude": -39.4965421875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -31.61427147947889,
+        "cumulative_fuel": 6.543298451081341
+      },
+      {
+        "step": 40,
+        "pixel_x": 82.5,
+        "pixel_y": 277.2978820800781,
+        "latitude": -39.4848234375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -32.436917279890594,
+        "cumulative_fuel": 6.711354847565716
+      },
+      {
+        "step": 41,
+        "pixel_x": 82.5,
+        "pixel_y": 273.29315185546875,
+        "latitude": -39.4731046875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -33.25956857346636,
+        "cumulative_fuel": 6.8794116102610285
+      },
+      {
+        "step": 42,
+        "pixel_x": 82.5,
+        "pixel_y": 269.2884521484375,
+        "latitude": -39.4613859375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -34.08221437387806,
+        "cumulative_fuel": 7.047468006745404
+      },
+      {
+        "step": 43,
+        "pixel_x": 82.5,
+        "pixel_y": 265.28375244140625,
+        "latitude": -39.4496671875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -34.90486017428976,
+        "cumulative_fuel": 7.215524403229779
+      },
+      {
+        "step": 44,
+        "pixel_x": 82.5,
+        "pixel_y": 261.27899169921875,
+        "latitude": -39.4379484375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047607421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -35.727516961029586,
+        "cumulative_fuel": 7.383581532136029
+      },
+      {
+        "step": 45,
+        "pixel_x": 82.5,
+        "pixel_y": 257.2742919921875,
+        "latitude": -39.4262296875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.00469970703125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -36.550162761441285,
+        "cumulative_fuel": 7.551637928620404
+      },
+      {
+        "step": 46,
+        "pixel_x": 82.5,
+        "pixel_y": 253.2695770263672,
+        "latitude": -39.4145109375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047149658203125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -37.37281130843502,
+        "cumulative_fuel": 7.719694508210248
+      },
+      {
+        "step": 47,
+        "pixel_x": 82.5,
+        "pixel_y": 249.2648468017578,
+        "latitude": -39.4027921875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.004730224609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -38.195462602010785,
+        "cumulative_fuel": 7.88775127090556
+      },
+      {
+        "step": 48,
+        "pixel_x": 82.5,
+        "pixel_y": 245.2601318359375,
+        "latitude": -39.3910734375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047149658203125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -39.01811114900452,
+        "cumulative_fuel": 8.055807850495404
+      },
+      {
+        "step": 49,
+        "pixel_x": 82.5,
+        "pixel_y": 241.2554473876953,
+        "latitude": -39.3793546875,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0046844482421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -39.84075420283419,
+        "cumulative_fuel": 8.22386406387431
+      },
+      {
+        "step": 50,
+        "pixel_x": 82.5,
+        "pixel_y": 237.250732421875,
+        "latitude": -39.3676359375,
+        "longitude": -72.443965625,
+        "velocity_x": 0.0,
+        "velocity_y": -4.0047149658203125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -40.663402749827924,
+        "cumulative_fuel": 8.391920643464154
+      },
+      {
+        "step": 51,
+        "pixel_x": 82.82009887695312,
+        "pixel_y": 233.3785858154297,
+        "latitude": -39.3559171875,
+        "longitude": -72.4410359375,
+        "velocity_x": 0.320098876953125,
+        "velocity_y": -3.8721466064453125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -41.46456648344237,
+        "cumulative_fuel": 8.558544902162046
+      },
+      {
+        "step": 52,
+        "pixel_x": 83.70655059814453,
+        "pixel_y": 229.7410430908203,
+        "latitude": -39.347128125,
+        "longitude": -72.43810625,
+        "velocity_x": 0.8864517211914062,
+        "velocity_y": -3.637542724609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -42.24028580118828,
+        "cumulative_fuel": 8.7234728664687
+      },
+      {
+        "step": 53,
+        "pixel_x": 84.70655059814453,
+        "pixel_y": 226.15054321289062,
+        "latitude": -39.335409375,
+        "longitude": -72.4351765625,
+        "velocity_x": 1.0,
+        "velocity_y": -3.5904998779296875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -43.012973674572144,
+        "cumulative_fuel": 8.888198734484554
+      },
+      {
+        "step": 54,
+        "pixel_x": 85.70655059814453,
+        "pixel_y": 222.56002807617188,
+        "latitude": -39.3266203125,
+        "longitude": -72.432246875,
+        "velocity_x": 1.0,
+        "velocity_y": -3.59051513671875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -43.785664193835295,
+        "cumulative_fuel": 9.05292477889236
+      },
+      {
+        "step": 55,
+        "pixel_x": 86.70655059814453,
+        "pixel_y": 218.9695587158203,
+        "latitude": -39.3149015625,
+        "longitude": -72.4293171875,
+        "velocity_x": 1.0,
+        "velocity_y": -3.5904693603515625,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -44.55834677546303,
+        "cumulative_fuel": 9.21765029412447
+      },
+      {
+        "step": 56,
+        "pixel_x": 87.3864517211914,
+        "pixel_y": 215.24642944335938,
+        "latitude": -39.3031828125,
+        "longitude": -72.4293171875,
+        "velocity_x": 0.679901123046875,
+        "velocity_y": -3.7231292724609375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -45.34139270058095,
+        "cumulative_fuel": 9.383066698922592
+      },
+      {
+        "step": 57,
+        "pixel_x": 87.5,
+        "pixel_y": 211.2887725830078,
+        "latitude": -39.2914640625,
+        "longitude": -72.4263875,
+        "velocity_x": 0.11354827880859375,
+        "velocity_y": -3.9576568603515625,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -46.155863929301645,
+        "cumulative_fuel": 9.5505781239609
+      },
+      {
+        "step": 58,
+        "pixel_x": 87.95613861083984,
+        "pixel_y": 207.47299194335938,
+        "latitude": -39.2797453125,
+        "longitude": -72.4263875,
+        "velocity_x": 0.45613861083984375,
+        "velocity_y": -3.8157806396484375,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -46.949394305151294,
+        "cumulative_fuel": 9.716693492141138
+      },
+      {
+        "step": 59,
+        "pixel_x": 88.97862243652344,
+        "pixel_y": 203.89181518554688,
+        "latitude": -39.27095625,
+        "longitude": -72.4234578125,
+        "velocity_x": 1.0224838256835938,
+        "velocity_y": -3.5811767578125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -47.72156549172474,
+        "cumulative_fuel": 9.88138491436963
+      },
+      {
+        "step": 60,
+        "pixel_x": 90.56746673583984,
+        "pixel_y": 200.5452117919922,
+        "latitude": -39.2621671875,
+        "longitude": -72.4175984375,
+        "velocity_x": 1.5888442993164062,
+        "velocity_y": -3.3466033935546875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -48.4901962436687,
+        "cumulative_fuel": 10.045840307622822
+      },
+      {
+        "step": 61,
+        "pixel_x": 92.72266387939453,
+        "pixel_y": 197.43321228027344,
+        "latitude": -39.2504484375,
+        "longitude": -72.4117390625,
+        "velocity_x": 2.1551971435546875,
+        "velocity_y": -3.11199951171875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -49.273371961010284,
+        "cumulative_fuel": 10.211265365235855
+      },
+      {
+        "step": 62,
+        "pixel_x": 95.44420623779297,
+        "pixel_y": 194.55580139160156,
+        "latitude": -39.2445890625,
+        "longitude": -72.4058796875,
+        "velocity_x": 2.7215423583984375,
+        "velocity_y": -2.877410888671875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -50.088078311446196,
+        "cumulative_fuel": 10.378792465055177
+      },
+      {
+        "step": 63,
+        "pixel_x": 98.27596282958984,
+        "pixel_y": 191.7240447998047,
+        "latitude": -39.2358,
+        "longitude": -72.397090625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -50.950644401317334,
+        "cumulative_fuel": 10.54684896798468
+      },
+      {
+        "step": 64,
+        "pixel_x": 101.10771942138672,
+        "pixel_y": 188.8922882080078,
+        "latitude": -39.2270109375,
+        "longitude": -72.3883015625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -51.81321049118847,
+        "cumulative_fuel": 10.714905470914182
+      },
+      {
+        "step": 65,
+        "pixel_x": 103.9394760131836,
+        "pixel_y": 186.06051635742188,
+        "latitude": -39.218221875,
+        "longitude": -72.3795125,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -52.675778523189,
+        "cumulative_fuel": 10.882962103318977
+      },
+      {
+        "step": 66,
+        "pixel_x": 106.771240234375,
+        "pixel_y": 183.22874450683594,
+        "latitude": -39.2094328125,
+        "longitude": -72.3707234375,
+        "velocity_x": 2.8317642211914062,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -53.53834752625096,
+        "cumulative_fuel": 11.051018800461202
+      },
+      {
+        "step": 67,
+        "pixel_x": 109.6030044555664,
+        "pixel_y": 180.39700317382812,
+        "latitude": -39.20064375,
+        "longitude": -72.361934375,
+        "velocity_x": 2.8317642211914062,
+        "velocity_y": -2.8317413330078125,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -54.400912645064594,
+        "cumulative_fuel": 11.219075238653538
+      },
+      {
+        "step": 68,
+        "pixel_x": 112.43475341796875,
+        "pixel_y": 177.5652618408203,
+        "latitude": -39.194784375,
+        "longitude": -72.356075,
+        "velocity_x": 2.8317489624023438,
+        "velocity_y": -2.8317413330078125,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -55.26347582174621,
+        "cumulative_fuel": 11.387131547370407
+      },
+      {
+        "step": 69,
+        "pixel_x": 115.26651763916016,
+        "pixel_y": 174.73348999023438,
+        "latitude": -39.1859953125,
+        "longitude": -72.3472859375,
+        "velocity_x": 2.8317642211914062,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -56.12604482480817,
+        "cumulative_fuel": 11.555188244512632
+      },
+      {
+        "step": 70,
+        "pixel_x": 118.09828186035156,
+        "pixel_y": 171.90171813964844,
+        "latitude": -39.17720625,
+        "longitude": -72.338496875,
+        "velocity_x": 2.8317642211914062,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -56.988613827870125,
+        "cumulative_fuel": 11.723244941654857
+      },
+      {
+        "step": 71,
+        "pixel_x": 120.93003845214844,
+        "pixel_y": 169.06996154785156,
+        "latitude": -39.1684171875,
+        "longitude": -72.3297078125,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -57.85117991774126,
+        "cumulative_fuel": 11.891301444584359
+      },
+      {
+        "step": 72,
+        "pixel_x": 123.76179504394531,
+        "pixel_y": 166.2382049560547,
+        "latitude": -39.159628125,
+        "longitude": -72.32091875,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -58.75520542458301,
+        "cumulative_fuel": 12.059357947513861
+      },
+      {
+        "step": 73,
+        "pixel_x": 126.59355163574219,
+        "pixel_y": 163.4064483642578,
+        "latitude": -39.1508390625,
+        "longitude": -72.3121296875,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -59.65923093142476,
+        "cumulative_fuel": 12.227414450443364
+      },
+      {
+        "step": 74,
+        "pixel_x": 129.42532348632812,
+        "pixel_y": 160.57467651367188,
+        "latitude": -39.1449796875,
+        "longitude": -72.3062703125,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -60.563260322520065,
+        "cumulative_fuel": 12.395471212323104
+      },
+      {
+        "step": 75,
+        "pixel_x": 132.25706481933594,
+        "pixel_y": 157.74293518066406,
+        "latitude": -39.136190625,
+        "longitude": -72.29748125,
+        "velocity_x": 2.8317413330078125,
+        "velocity_y": -2.8317413330078125,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -61.467281945108255,
+        "cumulative_fuel": 12.563527456302369
+      },
+      {
+        "step": 76,
+        "pixel_x": 135.0888214111328,
+        "pixel_y": 154.9111785888672,
+        "latitude": -39.1274015625,
+        "longitude": -72.2886921875,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -62.37130745195,
+        "cumulative_fuel": 12.731583959231871
+      },
+      {
+        "step": 77,
+        "pixel_x": 137.92059326171875,
+        "pixel_y": 152.07940673828125,
+        "latitude": -39.1186125,
+        "longitude": -72.279903125,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -63.27533684304531,
+        "cumulative_fuel": 12.899640721111611
+      },
+      {
+        "step": 78,
+        "pixel_x": 140.75234985351562,
+        "pixel_y": 149.24765014648438,
+        "latitude": -39.1098234375,
+        "longitude": -72.2711140625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -64.17936234988706,
+        "cumulative_fuel": 13.067697224041114
+      },
+      {
+        "step": 79,
+        "pixel_x": 143.5841064453125,
+        "pixel_y": 146.4158935546875,
+        "latitude": -39.101034375,
+        "longitude": -72.262325,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -65.0833878567288,
+        "cumulative_fuel": 13.235753726970616
+      },
+      {
+        "step": 80,
+        "pixel_x": 146.41586303710938,
+        "pixel_y": 143.58413696289062,
+        "latitude": -39.095175,
+        "longitude": -72.256465625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -65.98741336357055,
+        "cumulative_fuel": 13.403810229900119
+      },
+      {
+        "step": 81,
+        "pixel_x": 149.2476348876953,
+        "pixel_y": 140.7523651123047,
+        "latitude": -39.0863859375,
+        "longitude": -72.2476765625,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -66.89144275466586,
+        "cumulative_fuel": 13.571866991779858
+      },
+      {
+        "step": 82,
+        "pixel_x": 152.0793914794922,
+        "pixel_y": 137.9206085205078,
+        "latitude": -39.077596875,
+        "longitude": -72.2388875,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -67.79546826150761,
+        "cumulative_fuel": 13.73992349470936
+      },
+      {
+        "step": 83,
+        "pixel_x": 154.91114807128906,
+        "pixel_y": 135.08885192871094,
+        "latitude": -39.0688078125,
+        "longitude": -72.2300984375,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -68.69949376834936,
+        "cumulative_fuel": 13.907979997638863
+      },
+      {
+        "step": 84,
+        "pixel_x": 157.74290466308594,
+        "pixel_y": 132.25709533691406,
+        "latitude": -39.06001875,
+        "longitude": -72.221309375,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -69.6035192751911,
+        "cumulative_fuel": 14.076036500568366
+      },
+      {
+        "step": 85,
+        "pixel_x": 160.5746612548828,
+        "pixel_y": 129.4253387451172,
+        "latitude": -39.0512296875,
+        "longitude": -72.2125203125,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -70.50754478203285,
+        "cumulative_fuel": 14.244093003497868
+      },
+      {
+        "step": 86,
+        "pixel_x": 163.4064178466797,
+        "pixel_y": 126.59358215332031,
+        "latitude": -39.0453703125,
+        "longitude": -72.2066609375,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -71.4115702888746,
+        "cumulative_fuel": 14.41214950642737
+      },
+      {
+        "step": 87,
+        "pixel_x": 166.23818969726562,
+        "pixel_y": 123.7618179321289,
+        "latitude": -39.03658125,
+        "longitude": -72.197871875,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -72.31559870890717,
+        "cumulative_fuel": 14.580206203569595
+      },
+      {
+        "step": 88,
+        "pixel_x": 169.06993103027344,
+        "pixel_y": 120.9300537109375,
+        "latitude": -39.0277921875,
+        "longitude": -72.1890828125,
+        "velocity_x": 2.8317413330078125,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -73.21962324469142,
+        "cumulative_fuel": 14.748262641761931
+      },
+      {
+        "step": 89,
+        "pixel_x": 171.90170288085938,
+        "pixel_y": 118.0982894897461,
+        "latitude": -39.019003125,
+        "longitude": -72.18029375,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -74.123651664724,
+        "cumulative_fuel": 14.916319338904156
+      },
+      {
+        "step": 90,
+        "pixel_x": 174.7334442138672,
+        "pixel_y": 115.26654052734375,
+        "latitude": -39.0102140625,
+        "longitude": -72.1715046875,
+        "velocity_x": 2.8317413330078125,
+        "velocity_y": -2.8317489624023438,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -75.02767425837622,
+        "cumulative_fuel": 15.084375647621025
+      },
+      {
+        "step": 91,
+        "pixel_x": 177.56521606445312,
+        "pixel_y": 112.43477630615234,
+        "latitude": -39.001425,
+        "longitude": -72.162715625,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.018317796289920807,
+        "cumulative_reward": -75.9317026784088,
+        "cumulative_fuel": 15.25243234476325
+      },
+      {
+        "step": 92,
+        "pixel_x": 180.39698791503906,
+        "pixel_y": 109.60302734375,
+        "latitude": -38.995565625,
+        "longitude": -72.15685625,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317489624023438,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -76.7942697393492,
+        "cumulative_fuel": 15.420488912430704
+      },
+      {
+        "step": 93,
+        "pixel_x": 183.22872924804688,
+        "pixel_y": 106.77125549316406,
+        "latitude": -38.9867765625,
+        "longitude": -72.1480671875,
+        "velocity_x": 2.8317413330078125,
+        "velocity_y": -2.8317718505859375,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -77.6568358292308,
+        "cumulative_fuel": 15.588545415360905
+      },
+      {
+        "step": 94,
+        "pixel_x": 186.0605010986328,
+        "pixel_y": 103.93949890136719,
+        "latitude": -38.9779875,
+        "longitude": -72.139278125,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -78.51940386123134,
+        "cumulative_fuel": 15.7566020477657
+      },
+      {
+        "step": 95,
+        "pixel_x": 188.8922576904297,
+        "pixel_y": 101.10774230957031,
+        "latitude": -38.9691984375,
+        "longitude": -72.1304890625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -79.38196995110248,
+        "cumulative_fuel": 15.924658550695202
+      },
+      {
+        "step": 96,
+        "pixel_x": 191.72401428222656,
+        "pixel_y": 98.27598571777344,
+        "latitude": -38.960409375,
+        "longitude": -72.1217,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -80.24453604097361,
+        "cumulative_fuel": 16.092715053624705
+      },
+      {
+        "step": 97,
+        "pixel_x": 194.55577087402344,
+        "pixel_y": 95.44422149658203,
+        "latitude": -38.9516203125,
+        "longitude": -72.1129109375,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -81.10710310190879,
+        "cumulative_fuel": 16.26077162129181
+      },
+      {
+        "step": 98,
+        "pixel_x": 197.3875274658203,
+        "pixel_y": 92.61246490478516,
+        "latitude": -38.9457609375,
+        "longitude": -72.1070515625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -81.96966919177993,
+        "cumulative_fuel": 16.42882812422131
+      },
+      {
+        "step": 99,
+        "pixel_x": 200.2192840576172,
+        "pixel_y": 89.78070831298828,
+        "latitude": -38.936971875,
+        "longitude": -72.0982625,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -82.83223528165107,
+        "cumulative_fuel": 16.596884627150814
+      },
+      {
+        "step": 100,
+        "pixel_x": 203.05105590820312,
+        "pixel_y": 86.94894409179688,
+        "latitude": -38.9281828125,
+        "longitude": -72.0894734375,
+        "velocity_x": 2.8317718505859375,
+        "velocity_y": -2.8317642211914062,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -83.69480428471303,
+        "cumulative_fuel": 16.764941324293037
+      },
+      {
+        "step": 101,
+        "pixel_x": 205.8828125,
+        "pixel_y": 84.1171875,
+        "latitude": -38.91939375,
+        "longitude": -72.080684375,
+        "velocity_x": 2.831756591796875,
+        "velocity_y": -2.831756591796875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -84.51745168180165,
+        "cumulative_fuel": 16.93299782722254
+      },
+      {
+        "step": 102,
+        "pixel_x": 208.8701629638672,
+        "pixel_y": 81.66104888916016,
+        "latitude": -38.913534375,
+        "longitude": -72.0718953125,
+        "velocity_x": 2.9873504638671875,
+        "velocity_y": -2.4561386108398438,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -85.31538579017143,
+        "cumulative_fuel": 17.09940677757079
+      },
+      {
+        "step": 103,
+        "pixel_x": 212.0920867919922,
+        "pixel_y": 79.77125549316406,
+        "latitude": -38.907675,
+        "longitude": -72.06310625,
+        "velocity_x": 3.221923828125,
+        "velocity_y": -1.8897933959960938,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -86.08953111729261,
+        "cumulative_fuel": 17.264229809169127
+      },
+      {
+        "step": 104,
+        "pixel_x": 215.54861450195312,
+        "pixel_y": 78.44782257080078,
+        "latitude": -38.901815625,
+        "longitude": -72.0513875,
+        "velocity_x": 3.4565277099609375,
+        "velocity_y": -1.3234329223632812,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -86.8575512761297,
+        "cumulative_fuel": 17.428644496215195
+      },
+      {
+        "step": 105,
+        "pixel_x": 219.23974609375,
+        "pixel_y": 77.69073486328125,
+        "latitude": -38.901815625,
+        "longitude": -72.0425984375,
+        "velocity_x": 3.691131591796875,
+        "velocity_y": -0.7570877075195312,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -87.63758659641441,
+        "cumulative_fuel": 17.593860194024437
+      },
+      {
+        "step": 106,
+        "pixel_x": 223.1654510498047,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -72.0308796875,
+        "velocity_x": 3.9257049560546875,
+        "velocity_y": -0.19073486328125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -88.44684688644587,
+        "cumulative_fuel": 17.76102422315013
+      },
+      {
+        "step": 107,
+        "pixel_x": 227.170166015625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -72.0191609375,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -89.2694954334396,
+        "cumulative_fuel": 17.929080802739975
+      },
+      {
+        "step": 108,
+        "pixel_x": 231.17489624023438,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -72.0074421875,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -90.09214672701536,
+        "cumulative_fuel": 18.097137565435286
+      },
+      {
+        "step": 109,
+        "pixel_x": 235.1796112060547,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9957234375,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -90.95471396679162,
+        "cumulative_fuel": 18.26519414502513
+      },
+      {
+        "step": 110,
+        "pixel_x": 239.184326171875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9840046875,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -91.81728120656787,
+        "cumulative_fuel": 18.433250724614975
+      },
+      {
+        "step": 111,
+        "pixel_x": 243.1890411376953,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9722859375,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -92.67984844634412,
+        "cumulative_fuel": 18.60130730420482
+      },
+      {
+        "step": 112,
+        "pixel_x": 247.19375610351562,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9605671875,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -93.54241568612038,
+        "cumulative_fuel": 18.769363883794664
+      },
+      {
+        "step": 113,
+        "pixel_x": 251.198486328125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9488484375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -94.40498567247866,
+        "cumulative_fuel": 18.937420646489976
+      },
+      {
+        "step": 114,
+        "pixel_x": 255.2032012939453,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9371296875,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -95.26755291225491,
+        "cumulative_fuel": 19.10547722607982
+      },
+      {
+        "step": 115,
+        "pixel_x": 259.2079162597656,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9254109375,
+        "velocity_x": 4.0047149658203125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -96.13012015203117,
+        "cumulative_fuel": 19.273533805669665
+      },
+      {
+        "step": 116,
+        "pixel_x": 263.2126159667969,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9136921875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -96.9926846452254,
+        "cumulative_fuel": 19.44159020215404
+      },
+      {
+        "step": 117,
+        "pixel_x": 267.21734619140625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.9019734375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -97.85525463158368,
+        "cumulative_fuel": 19.60964696484935
+      },
+      {
+        "step": 118,
+        "pixel_x": 271.2220458984375,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8902546875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -98.7178191247779,
+        "cumulative_fuel": 19.777703361333725
+      },
+      {
+        "step": 119,
+        "pixel_x": 275.22674560546875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8785359375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -99.58038361797213,
+        "cumulative_fuel": 19.9457597578181
+      },
+      {
+        "step": 120,
+        "pixel_x": 279.23150634765625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8668171875,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -100.44295909749448,
+        "cumulative_fuel": 20.113816886724347
+      },
+      {
+        "step": 121,
+        "pixel_x": 283.2362060546875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8550984375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -101.30552359068871,
+        "cumulative_fuel": 20.28187328320872
+      },
+      {
+        "step": 122,
+        "pixel_x": 287.24090576171875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8433796875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -102.16808808388294,
+        "cumulative_fuel": 20.449929679693096
+      },
+      {
+        "step": 123,
+        "pixel_x": 291.24566650390625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8316609375,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -103.03066356340528,
+        "cumulative_fuel": 20.617986808599344
+      },
+      {
+        "step": 124,
+        "pixel_x": 295.2503356933594,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8199421875,
+        "velocity_x": 4.004669189453125,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -103.89322256343544,
+        "cumulative_fuel": 20.78604283887278
+      },
+      {
+        "step": 125,
+        "pixel_x": 299.25506591796875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.8082234375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.014171854592859745,
+        "cumulative_reward": -104.75579254979372,
+        "cumulative_fuel": 20.954099601568092
+      },
+      {
+        "step": 126,
+        "pixel_x": 303.25982666015625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7965046875,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -105.57844933653355,
+        "cumulative_fuel": 21.12215673047434
+      },
+      {
+        "step": 127,
+        "pixel_x": 307.2645263671875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7847859375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -106.40109513694526,
+        "cumulative_fuel": 21.290213126958715
+      },
+      {
+        "step": 128,
+        "pixel_x": 311.26922607421875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7730671875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -107.22374093735696,
+        "cumulative_fuel": 21.45826952344309
+      },
+      {
+        "step": 129,
+        "pixel_x": 315.27398681640625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7613484375,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -108.04639772409679,
+        "cumulative_fuel": 21.626326652349338
+      },
+      {
+        "step": 130,
+        "pixel_x": 319.2786865234375,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7496296875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -108.8690435245085,
+        "cumulative_fuel": 21.794383048833712
+      },
+      {
+        "step": 131,
+        "pixel_x": 323.28338623046875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7379109375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -109.6916893249202,
+        "cumulative_fuel": 21.962439445318086
+      },
+      {
+        "step": 132,
+        "pixel_x": 327.28814697265625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7261921875,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -110.51434611166003,
+        "cumulative_fuel": 22.130496574224335
+      },
+      {
+        "step": 133,
+        "pixel_x": 331.2928161621094,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7144734375,
+        "velocity_x": 4.004669189453125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -111.33698641890767,
+        "cumulative_fuel": 22.29855260449777
+      },
+      {
+        "step": 134,
+        "pixel_x": 335.29754638671875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.7027546875,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -112.15963771248343,
+        "cumulative_fuel": 22.466609367193083
+      },
+      {
+        "step": 135,
+        "pixel_x": 339.30230712890625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6910359375,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -112.98229449922326,
+        "cumulative_fuel": 22.63466649609933
+      },
+      {
+        "step": 136,
+        "pixel_x": 343.3069763183594,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6793171875,
+        "velocity_x": 4.004669189453125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -113.8049348064709,
+        "cumulative_fuel": 22.80272252637277
+      },
+      {
+        "step": 137,
+        "pixel_x": 347.31170654296875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6675984375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -114.62758610004666,
+        "cumulative_fuel": 22.97077928906808
+      },
+      {
+        "step": 138,
+        "pixel_x": 351.31640625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6558796875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -115.45023190045836,
+        "cumulative_fuel": 23.138835685552454
+      },
+      {
+        "step": 139,
+        "pixel_x": 355.32110595703125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6441609375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -116.27287770087007,
+        "cumulative_fuel": 23.30689208203683
+      },
+      {
+        "step": 140,
+        "pixel_x": 359.32586669921875,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6324421875,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -117.0955344876099,
+        "cumulative_fuel": 23.474949210943077
+      },
+      {
+        "step": 141,
+        "pixel_x": 363.33056640625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6207234375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -117.9181802880216,
+        "cumulative_fuel": 23.64300560742745
+      },
+      {
+        "step": 142,
+        "pixel_x": 367.33526611328125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.6090046875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -118.74082608843331,
+        "cumulative_fuel": 23.811062003911825
+      },
+      {
+        "step": 143,
+        "pixel_x": 371.3399963378906,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5972859375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -119.56347738200907,
+        "cumulative_fuel": 23.979118766607137
+      },
+      {
+        "step": 144,
+        "pixel_x": 375.3446960449219,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5855671875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -120.38612318242077,
+        "cumulative_fuel": 24.14717516309151
+      },
+      {
+        "step": 145,
+        "pixel_x": 379.34942626953125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5738484375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -121.20877447599653,
+        "cumulative_fuel": 24.315231925786822
+      },
+      {
+        "step": 146,
+        "pixel_x": 383.3541564941406,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5621296875,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -122.0314257695723,
+        "cumulative_fuel": 24.483288688482133
+      },
+      {
+        "step": 147,
+        "pixel_x": 387.3588562011719,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5504109375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -122.854071569984,
+        "cumulative_fuel": 24.651345084966508
+      },
+      {
+        "step": 148,
+        "pixel_x": 391.36358642578125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5386921875,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -123.67672286355976,
+        "cumulative_fuel": 24.81940184766182
+      },
+      {
+        "step": 149,
+        "pixel_x": 395.3683166503906,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5269734375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -124.49937415713552,
+        "cumulative_fuel": 24.98745861035713
+      },
+      {
+        "step": 150,
+        "pixel_x": 399.3730163574219,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5152546875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -125.32201995754723,
+        "cumulative_fuel": 25.155515006841505
+      },
+      {
+        "step": 151,
+        "pixel_x": 403.37774658203125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.5035359375,
+        "velocity_x": 4.004730224609375,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -126.14467125112299,
+        "cumulative_fuel": 25.323571769536816
+      },
+      {
+        "step": 152,
+        "pixel_x": 407.3824462890625,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.4918171875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -126.96731705153469,
+        "cumulative_fuel": 25.49162816602119
+      },
+      {
+        "step": 153,
+        "pixel_x": 411.38714599609375,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.4800984375,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -127.7899628519464,
+        "cumulative_fuel": 25.659684562505564
+      },
+      {
+        "step": 154,
+        "pixel_x": 415.39190673828125,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.4683796875,
+        "velocity_x": 4.0047607421875,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -128.61261963868623,
+        "cumulative_fuel": 25.827741691411813
+      },
+      {
+        "step": 155,
+        "pixel_x": 419.3965759277344,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.4566609375,
+        "velocity_x": 4.004669189453125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -129.43525994593386,
+        "cumulative_fuel": 25.99579772168525
+      },
+      {
+        "step": 156,
+        "pixel_x": 423.4012756347656,
+        "pixel_y": 77.5,
+        "latitude": -38.901815625,
+        "longitude": -71.4449421875,
+        "velocity_x": 4.00469970703125,
+        "velocity_y": 0.0,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -130.25790574634556,
+        "cumulative_fuel": 26.163854118169624
+      },
+      {
+        "step": 157,
+        "pixel_x": 427.32293701171875,
+        "pixel_y": 77.19999694824219,
+        "latitude": -38.8988859375,
+        "longitude": -71.4332234375,
+        "velocity_x": 3.921661376953125,
+        "velocity_y": -0.3000030517578125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -131.06766712746065,
+        "cumulative_fuel": 26.33105155336756
+      },
+      {
+        "step": 158,
+        "pixel_x": 429.3045349121094,
+        "pixel_y": 77.125,
+        "latitude": -38.8988859375,
+        "longitude": -71.4273640625,
+        "velocity_x": 1.981597900390625,
+        "velocity_y": -0.0749969482421875,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -131.52640996611973,
+        "cumulative_fuel": 26.474847752401757
+      },
+      {
+        "step": 159,
+        "pixel_x": 435.0,
+        "pixel_y": 76.0,
+        "latitude": -38.89595625,
+        "longitude": -71.4097859375,
+        "velocity_x": 5.695465087890625,
+        "velocity_y": -1.125,
+        "concentration": 0.01017998531460762,
+        "cumulative_reward": -132.6732016379817,
+        "cumulative_fuel": 26.664513873649483
+      }
+    ],
+    "total_reward": -32.67320163798169,
+    "total_fuel": 26.664513873649483,
+    "max_concentration": 0.018317796289920807,
+    "success": true,
+    "steps_taken": 160,
+    "path_coordinates": [
+      [
+        76.0,
+        435.0
+      ],
+      [
+        79.46804809570312,
+        430.2750549316406
+      ],
+      [
+        80.0744400024414,
+        428.5135803222656
+      ],
+      [
+        81.37443542480469,
+        425.00616455078125
+      ],
+      [
+        82.22039794921875,
+        421.35186767578125
+      ],
+      [
+        82.5,
+        417.4629821777344
+      ],
+      [
+        82.5,
+        413.458251953125
+      ],
+      [
+        82.5,
+        409.45355224609375
+      ],
+      [
+        82.5,
+        405.44879150390625
+      ],
+      [
+        82.5,
+        401.444091796875
+      ],
+      [
+        82.5,
+        397.43939208984375
+      ],
+      [
+        82.5,
+        393.4346618652344
+      ],
+      [
+        82.5,
+        389.4299621582031
+      ],
+      [
+        82.5,
+        385.42523193359375
+      ],
+      [
+        82.5,
+        381.4205017089844
+      ],
+      [
+        82.5,
+        377.4158020019531
+      ],
+      [
+        82.5,
+        373.41107177734375
+      ],
+      [
+        82.5,
+        369.4063415527344
+      ],
+      [
+        82.5,
+        365.4016418457031
+      ],
+      [
+        82.5,
+        361.39691162109375
+      ],
+      [
+        82.5,
+        357.3922119140625
+      ],
+      [
+        82.5,
+        353.38751220703125
+      ],
+      [
+        82.5,
+        349.38275146484375
+      ],
+      [
+        82.5,
+        345.3780822753906
+      ],
+      [
+        82.5,
+        341.37335205078125
+      ],
+      [
+        82.5,
+        337.36859130859375
+      ],
+      [
+        82.5,
+        333.3639221191406
+      ],
+      [
+        82.5,
+        329.35919189453125
+      ],
+      [
+        82.5,
+        325.3544921875
+      ],
+      [
+        82.5,
+        321.3497619628906
+      ],
+      [
+        82.5,
+        317.34503173828125
+      ],
+      [
+        82.5,
+        313.34033203125
+      ],
+      [
+        82.5,
+        309.33563232421875
+      ],
+      [
+        82.5,
+        305.3309020996094
+      ],
+      [
+        82.5,
+        301.3262023925781
+      ],
+      [
+        82.5,
+        297.32147216796875
+      ],
+      [
+        82.5,
+        293.3167419433594
+      ],
+      [
+        82.5,
+        289.3120422363281
+      ],
+      [
+        82.5,
+        285.30731201171875
+      ],
+      [
+        82.5,
+        281.3025817871094
+      ],
+      [
+        82.5,
+        277.2978820800781
+      ],
+      [
+        82.5,
+        273.29315185546875
+      ],
+      [
+        82.5,
+        269.2884521484375
+      ],
+      [
+        82.5,
+        265.28375244140625
+      ],
+      [
+        82.5,
+        261.27899169921875
+      ],
+      [
+        82.5,
+        257.2742919921875
+      ],
+      [
+        82.5,
+        253.2695770263672
+      ],
+      [
+        82.5,
+        249.2648468017578
+      ],
+      [
+        82.5,
+        245.2601318359375
+      ],
+      [
+        82.5,
+        241.2554473876953
+      ],
+      [
+        82.5,
+        237.250732421875
+      ],
+      [
+        82.82009887695312,
+        233.3785858154297
+      ],
+      [
+        83.70655059814453,
+        229.7410430908203
+      ],
+      [
+        84.70655059814453,
+        226.15054321289062
+      ],
+      [
+        85.70655059814453,
+        222.56002807617188
+      ],
+      [
+        86.70655059814453,
+        218.9695587158203
+      ],
+      [
+        87.3864517211914,
+        215.24642944335938
+      ],
+      [
+        87.5,
+        211.2887725830078
+      ],
+      [
+        87.95613861083984,
+        207.47299194335938
+      ],
+      [
+        88.97862243652344,
+        203.89181518554688
+      ],
+      [
+        90.56746673583984,
+        200.5452117919922
+      ],
+      [
+        92.72266387939453,
+        197.43321228027344
+      ],
+      [
+        95.44420623779297,
+        194.55580139160156
+      ],
+      [
+        98.27596282958984,
+        191.7240447998047
+      ],
+      [
+        101.10771942138672,
+        188.8922882080078
+      ],
+      [
+        103.9394760131836,
+        186.06051635742188
+      ],
+      [
+        106.771240234375,
+        183.22874450683594
+      ],
+      [
+        109.6030044555664,
+        180.39700317382812
+      ],
+      [
+        112.43475341796875,
+        177.5652618408203
+      ],
+      [
+        115.26651763916016,
+        174.73348999023438
+      ],
+      [
+        118.09828186035156,
+        171.90171813964844
+      ],
+      [
+        120.93003845214844,
+        169.06996154785156
+      ],
+      [
+        123.76179504394531,
+        166.2382049560547
+      ],
+      [
+        126.59355163574219,
+        163.4064483642578
+      ],
+      [
+        129.42532348632812,
+        160.57467651367188
+      ],
+      [
+        132.25706481933594,
+        157.74293518066406
+      ],
+      [
+        135.0888214111328,
+        154.9111785888672
+      ],
+      [
+        137.92059326171875,
+        152.07940673828125
+      ],
+      [
+        140.75234985351562,
+        149.24765014648438
+      ],
+      [
+        143.5841064453125,
+        146.4158935546875
+      ],
+      [
+        146.41586303710938,
+        143.58413696289062
+      ],
+      [
+        149.2476348876953,
+        140.7523651123047
+      ],
+      [
+        152.0793914794922,
+        137.9206085205078
+      ],
+      [
+        154.91114807128906,
+        135.08885192871094
+      ],
+      [
+        157.74290466308594,
+        132.25709533691406
+      ],
+      [
+        160.5746612548828,
+        129.4253387451172
+      ],
+      [
+        163.4064178466797,
+        126.59358215332031
+      ],
+      [
+        166.23818969726562,
+        123.7618179321289
+      ],
+      [
+        169.06993103027344,
+        120.9300537109375
+      ],
+      [
+        171.90170288085938,
+        118.0982894897461
+      ],
+      [
+        174.7334442138672,
+        115.26654052734375
+      ],
+      [
+        177.56521606445312,
+        112.43477630615234
+      ],
+      [
+        180.39698791503906,
+        109.60302734375
+      ],
+      [
+        183.22872924804688,
+        106.77125549316406
+      ],
+      [
+        186.0605010986328,
+        103.93949890136719
+      ],
+      [
+        188.8922576904297,
+        101.10774230957031
+      ],
+      [
+        191.72401428222656,
+        98.27598571777344
+      ],
+      [
+        194.55577087402344,
+        95.44422149658203
+      ],
+      [
+        197.3875274658203,
+        92.61246490478516
+      ],
+      [
+        200.2192840576172,
+        89.78070831298828
+      ],
+      [
+        203.05105590820312,
+        86.94894409179688
+      ],
+      [
+        205.8828125,
+        84.1171875
+      ],
+      [
+        208.8701629638672,
+        81.66104888916016
+      ],
+      [
+        212.0920867919922,
+        79.77125549316406
+      ],
+      [
+        215.54861450195312,
+        78.44782257080078
+      ],
+      [
+        219.23974609375,
+        77.69073486328125
+      ],
+      [
+        223.1654510498047,
+        77.5
+      ],
+      [
+        227.170166015625,
+        77.5
+      ],
+      [
+        231.17489624023438,
+        77.5
+      ],
+      [
+        235.1796112060547,
+        77.5
+      ],
+      [
+        239.184326171875,
+        77.5
+      ],
+      [
+        243.1890411376953,
+        77.5
+      ],
+      [
+        247.19375610351562,
+        77.5
+      ],
+      [
+        251.198486328125,
+        77.5
+      ],
+      [
+        255.2032012939453,
+        77.5
+      ],
+      [
+        259.2079162597656,
+        77.5
+      ],
+      [
+        263.2126159667969,
+        77.5
+      ],
+      [
+        267.21734619140625,
+        77.5
+      ],
+      [
+        271.2220458984375,
+        77.5
+      ],
+      [
+        275.22674560546875,
+        77.5
+      ],
+      [
+        279.23150634765625,
+        77.5
+      ],
+      [
+        283.2362060546875,
+        77.5
+      ],
+      [
+        287.24090576171875,
+        77.5
+      ],
+      [
+        291.24566650390625,
+        77.5
+      ],
+      [
+        295.2503356933594,
+        77.5
+      ],
+      [
+        299.25506591796875,
+        77.5
+      ],
+      [
+        303.25982666015625,
+        77.5
+      ],
+      [
+        307.2645263671875,
+        77.5
+      ],
+      [
+        311.26922607421875,
+        77.5
+      ],
+      [
+        315.27398681640625,
+        77.5
+      ],
+      [
+        319.2786865234375,
+        77.5
+      ],
+      [
+        323.28338623046875,
+        77.5
+      ],
+      [
+        327.28814697265625,
+        77.5
+      ],
+      [
+        331.2928161621094,
+        77.5
+      ],
+      [
+        335.29754638671875,
+        77.5
+      ],
+      [
+        339.30230712890625,
+        77.5
+      ],
+      [
+        343.3069763183594,
+        77.5
+      ],
+      [
+        347.31170654296875,
+        77.5
+      ],
+      [
+        351.31640625,
+        77.5
+      ],
+      [
+        355.32110595703125,
+        77.5
+      ],
+      [
+        359.32586669921875,
+        77.5
+      ],
+      [
+        363.33056640625,
+        77.5
+      ],
+      [
+        367.33526611328125,
+        77.5
+      ],
+      [
+        371.3399963378906,
+        77.5
+      ],
+      [
+        375.3446960449219,
+        77.5
+      ],
+      [
+        379.34942626953125,
+        77.5
+      ],
+      [
+        383.3541564941406,
+        77.5
+      ],
+      [
+        387.3588562011719,
+        77.5
+      ],
+      [
+        391.36358642578125,
+        77.5
+      ],
+      [
+        395.3683166503906,
+        77.5
+      ],
+      [
+        399.3730163574219,
+        77.5
+      ],
+      [
+        403.37774658203125,
+        77.5
+      ],
+      [
+        407.3824462890625,
+        77.5
+      ],
+      [
+        411.38714599609375,
+        77.5
+      ],
+      [
+        415.39190673828125,
+        77.5
+      ],
+      [
+        419.3965759277344,
+        77.5
+      ],
+      [
+        423.4012756347656,
+        77.5
+      ],
+      [
+        427.32293701171875,
+        77.19999694824219
+      ],
+      [
+        429.3045349121094,
+        77.125
+      ],
+      [
+        435.0,
+        76.0
+      ]
+    ],
+    "geo_coordinates": [
+      [
+        -72.46154375,
+        -39.9477140625
+      ],
+      [
+        -72.4527546875,
+        -39.933065625
+      ],
+      [
+        -72.449825,
+        -39.9301359375
+      ],
+      [
+        -72.4468953125,
+        -39.9184171875
+      ],
+      [
+        -72.443965625,
+        -39.9066984375
+      ],
+      [
+        -72.443965625,
+        -39.8949796875
+      ],
+      [
+        -72.443965625,
+        -39.8832609375
+      ],
+      [
+        -72.443965625,
+        -39.8715421875
+      ],
+      [
+        -72.443965625,
+        -39.8598234375
+      ],
+      [
+        -72.443965625,
+        -39.8481046875
+      ],
+      [
+        -72.443965625,
+        -39.8363859375
+      ],
+      [
+        -72.443965625,
+        -39.8246671875
+      ],
+      [
+        -72.443965625,
+        -39.8129484375
+      ],
+      [
+        -72.443965625,
+        -39.8012296875
+      ],
+      [
+        -72.443965625,
+        -39.7895109375
+      ],
+      [
+        -72.443965625,
+        -39.7777921875
+      ],
+      [
+        -72.443965625,
+        -39.7660734375
+      ],
+      [
+        -72.443965625,
+        -39.7543546875
+      ],
+      [
+        -72.443965625,
+        -39.7426359375
+      ],
+      [
+        -72.443965625,
+        -39.7309171875
+      ],
+      [
+        -72.443965625,
+        -39.7191984375
+      ],
+      [
+        -72.443965625,
+        -39.7074796875
+      ],
+      [
+        -72.443965625,
+        -39.6957609375
+      ],
+      [
+        -72.443965625,
+        -39.6840421875
+      ],
+      [
+        -72.443965625,
+        -39.6723234375
+      ],
+      [
+        -72.443965625,
+        -39.6606046875
+      ],
+      [
+        -72.443965625,
+        -39.6488859375
+      ],
+      [
+        -72.443965625,
+        -39.6371671875
+      ],
+      [
+        -72.443965625,
+        -39.6254484375
+      ],
+      [
+        -72.443965625,
+        -39.6137296875
+      ],
+      [
+        -72.443965625,
+        -39.6020109375
+      ],
+      [
+        -72.443965625,
+        -39.5902921875
+      ],
+      [
+        -72.443965625,
+        -39.5785734375
+      ],
+      [
+        -72.443965625,
+        -39.5668546875
+      ],
+      [
+        -72.443965625,
+        -39.5551359375
+      ],
+      [
+        -72.443965625,
+        -39.5434171875
+      ],
+      [
+        -72.443965625,
+        -39.5316984375
+      ],
+      [
+        -72.443965625,
+        -39.5199796875
+      ],
+      [
+        -72.443965625,
+        -39.5082609375
+      ],
+      [
+        -72.443965625,
+        -39.4965421875
+      ],
+      [
+        -72.443965625,
+        -39.4848234375
+      ],
+      [
+        -72.443965625,
+        -39.4731046875
+      ],
+      [
+        -72.443965625,
+        -39.4613859375
+      ],
+      [
+        -72.443965625,
+        -39.4496671875
+      ],
+      [
+        -72.443965625,
+        -39.4379484375
+      ],
+      [
+        -72.443965625,
+        -39.4262296875
+      ],
+      [
+        -72.443965625,
+        -39.4145109375
+      ],
+      [
+        -72.443965625,
+        -39.4027921875
+      ],
+      [
+        -72.443965625,
+        -39.3910734375
+      ],
+      [
+        -72.443965625,
+        -39.3793546875
+      ],
+      [
+        -72.443965625,
+        -39.3676359375
+      ],
+      [
+        -72.4410359375,
+        -39.3559171875
+      ],
+      [
+        -72.43810625,
+        -39.347128125
+      ],
+      [
+        -72.4351765625,
+        -39.335409375
+      ],
+      [
+        -72.432246875,
+        -39.3266203125
+      ],
+      [
+        -72.4293171875,
+        -39.3149015625
+      ],
+      [
+        -72.4293171875,
+        -39.3031828125
+      ],
+      [
+        -72.4263875,
+        -39.2914640625
+      ],
+      [
+        -72.4263875,
+        -39.2797453125
+      ],
+      [
+        -72.4234578125,
+        -39.27095625
+      ],
+      [
+        -72.4175984375,
+        -39.2621671875
+      ],
+      [
+        -72.4117390625,
+        -39.2504484375
+      ],
+      [
+        -72.4058796875,
+        -39.2445890625
+      ],
+      [
+        -72.397090625,
+        -39.2358
+      ],
+      [
+        -72.3883015625,
+        -39.2270109375
+      ],
+      [
+        -72.3795125,
+        -39.218221875
+      ],
+      [
+        -72.3707234375,
+        -39.2094328125
+      ],
+      [
+        -72.361934375,
+        -39.20064375
+      ],
+      [
+        -72.356075,
+        -39.194784375
+      ],
+      [
+        -72.3472859375,
+        -39.1859953125
+      ],
+      [
+        -72.338496875,
+        -39.17720625
+      ],
+      [
+        -72.3297078125,
+        -39.1684171875
+      ],
+      [
+        -72.32091875,
+        -39.159628125
+      ],
+      [
+        -72.3121296875,
+        -39.1508390625
+      ],
+      [
+        -72.3062703125,
+        -39.1449796875
+      ],
+      [
+        -72.29748125,
+        -39.136190625
+      ],
+      [
+        -72.2886921875,
+        -39.1274015625
+      ],
+      [
+        -72.279903125,
+        -39.1186125
+      ],
+      [
+        -72.2711140625,
+        -39.1098234375
+      ],
+      [
+        -72.262325,
+        -39.101034375
+      ],
+      [
+        -72.256465625,
+        -39.095175
+      ],
+      [
+        -72.2476765625,
+        -39.0863859375
+      ],
+      [
+        -72.2388875,
+        -39.077596875
+      ],
+      [
+        -72.2300984375,
+        -39.0688078125
+      ],
+      [
+        -72.221309375,
+        -39.06001875
+      ],
+      [
+        -72.2125203125,
+        -39.0512296875
+      ],
+      [
+        -72.2066609375,
+        -39.0453703125
+      ],
+      [
+        -72.197871875,
+        -39.03658125
+      ],
+      [
+        -72.1890828125,
+        -39.0277921875
+      ],
+      [
+        -72.18029375,
+        -39.019003125
+      ],
+      [
+        -72.1715046875,
+        -39.0102140625
+      ],
+      [
+        -72.162715625,
+        -39.001425
+      ],
+      [
+        -72.15685625,
+        -38.995565625
+      ],
+      [
+        -72.1480671875,
+        -38.9867765625
+      ],
+      [
+        -72.139278125,
+        -38.9779875
+      ],
+      [
+        -72.1304890625,
+        -38.9691984375
+      ],
+      [
+        -72.1217,
+        -38.960409375
+      ],
+      [
+        -72.1129109375,
+        -38.9516203125
+      ],
+      [
+        -72.1070515625,
+        -38.9457609375
+      ],
+      [
+        -72.0982625,
+        -38.936971875
+      ],
+      [
+        -72.0894734375,
+        -38.9281828125
+      ],
+      [
+        -72.080684375,
+        -38.91939375
+      ],
+      [
+        -72.0718953125,
+        -38.913534375
+      ],
+      [
+        -72.06310625,
+        -38.907675
+      ],
+      [
+        -72.0513875,
+        -38.901815625
+      ],
+      [
+        -72.0425984375,
+        -38.901815625
+      ],
+      [
+        -72.0308796875,
+        -38.901815625
+      ],
+      [
+        -72.0191609375,
+        -38.901815625
+      ],
+      [
+        -72.0074421875,
+        -38.901815625
+      ],
+      [
+        -71.9957234375,
+        -38.901815625
+      ],
+      [
+        -71.9840046875,
+        -38.901815625
+      ],
+      [
+        -71.9722859375,
+        -38.901815625
+      ],
+      [
+        -71.9605671875,
+        -38.901815625
+      ],
+      [
+        -71.9488484375,
+        -38.901815625
+      ],
+      [
+        -71.9371296875,
+        -38.901815625
+      ],
+      [
+        -71.9254109375,
+        -38.901815625
+      ],
+      [
+        -71.9136921875,
+        -38.901815625
+      ],
+      [
+        -71.9019734375,
+        -38.901815625
+      ],
+      [
+        -71.8902546875,
+        -38.901815625
+      ],
+      [
+        -71.8785359375,
+        -38.901815625
+      ],
+      [
+        -71.8668171875,
+        -38.901815625
+      ],
+      [
+        -71.8550984375,
+        -38.901815625
+      ],
+      [
+        -71.8433796875,
+        -38.901815625
+      ],
+      [
+        -71.8316609375,
+        -38.901815625
+      ],
+      [
+        -71.8199421875,
+        -38.901815625
+      ],
+      [
+        -71.8082234375,
+        -38.901815625
+      ],
+      [
+        -71.7965046875,
+        -38.901815625
+      ],
+      [
+        -71.7847859375,
+        -38.901815625
+      ],
+      [
+        -71.7730671875,
+        -38.901815625
+      ],
+      [
+        -71.7613484375,
+        -38.901815625
+      ],
+      [
+        -71.7496296875,
+        -38.901815625
+      ],
+      [
+        -71.7379109375,
+        -38.901815625
+      ],
+      [
+        -71.7261921875,
+        -38.901815625
+      ],
+      [
+        -71.7144734375,
+        -38.901815625
+      ],
+      [
+        -71.7027546875,
+        -38.901815625
+      ],
+      [
+        -71.6910359375,
+        -38.901815625
+      ],
+      [
+        -71.6793171875,
+        -38.901815625
+      ],
+      [
+        -71.6675984375,
+        -38.901815625
+      ],
+      [
+        -71.6558796875,
+        -38.901815625
+      ],
+      [
+        -71.6441609375,
+        -38.901815625
+      ],
+      [
+        -71.6324421875,
+        -38.901815625
+      ],
+      [
+        -71.6207234375,
+        -38.901815625
+      ],
+      [
+        -71.6090046875,
+        -38.901815625
+      ],
+      [
+        -71.5972859375,
+        -38.901815625
+      ],
+      [
+        -71.5855671875,
+        -38.901815625
+      ],
+      [
+        -71.5738484375,
+        -38.901815625
+      ],
+      [
+        -71.5621296875,
+        -38.901815625
+      ],
+      [
+        -71.5504109375,
+        -38.901815625
+      ],
+      [
+        -71.5386921875,
+        -38.901815625
+      ],
+      [
+        -71.5269734375,
+        -38.901815625
+      ],
+      [
+        -71.5152546875,
+        -38.901815625
+      ],
+      [
+        -71.5035359375,
+        -38.901815625
+      ],
+      [
+        -71.4918171875,
+        -38.901815625
+      ],
+      [
+        -71.4800984375,
+        -38.901815625
+      ],
+      [
+        -71.4683796875,
+        -38.901815625
+      ],
+      [
+        -71.4566609375,
+        -38.901815625
+      ],
+      [
+        -71.4449421875,
+        -38.901815625
+      ],
+      [
+        -71.4332234375,
+        -38.8988859375
+      ],
+      [
+        -71.4273640625,
+        -38.8988859375
+      ],
+      [
+        -71.4097859375,
+        -38.89595625
+      ]
+    ],
+    "planning_method": "fallback",
+    "scene_name": "单中心模型_规则",
+    "cloud_info": {
+      "center_lat": -39.45845625,
+      "center_lon": -71.9840046875,
+      "zone_radii": {
+        "high": 0.4516,
+        "medium": 0.4791,
+        "low": 0.5129,
+        "safe": 0.5531
+      }
+    },
+    "start_geo": [
+      -39.9483,
+      -72.4592
+    ],
+    "target_geo": [
+      -38.8983,
+      -71.4092
+    ],
+    "start_pixel": [
+      435,
+      76
+    ],
+    "target_pixel": [
+      76,
+      435
+    ],
+    "validation_info": {
+      "used_fallback": true,
+      "fallback_reason": "rl_path_rejected",
+      "fallback_summary": {
+        "max_concentration": 0.018317796289920807,
+        "mean_concentration": 0.01181593345827423,
+        "path_length": 632.0428228041263
+      },
+      "source_image": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_uploads/image_validation_scene/image_validation_scene_20260501_000428_322801.png",
+      "conversion_summary": {
+        "shape": [
+          512,
+          512
+        ],
+        "max_concentration": 1.0,
+        "mean_concentration": 0.28390830755233765,
+        "active_area_ratio": 0.3205413818359375
+      },
+      "scene_name": "单中心模型_规则",
+      "rl_attempt": {
+        "success": false,
+        "max_concentration": 0.915298342704773,
+        "steps_taken": 24
+      }
+    }
+  },
+  "cloud_info": {
+    "center_lat": -39.45845625,
+    "center_lon": -71.9840046875,
+    "zone_radii": {
+      "high": 0.4516,
+      "medium": 0.4791,
+      "low": 0.5129,
+      "safe": 0.5531
+    }
+  },
+  "validation_info": {
+    "used_fallback": true,
+    "fallback_reason": "rl_path_rejected",
+    "fallback_summary": {
+      "max_concentration": 0.018317796289920807,
+      "mean_concentration": 0.01181593345827423,
+      "path_length": 632.0428228041263
+    },
+    "source_image": "/Users/jiangbowang/YO/Parttimejob/Intelligent_Pilots/Intelligent_Pilots/output/web_uploads/image_validation_scene/image_validation_scene_20260501_000428_322801.png",
+    "conversion_summary": {
+      "shape": [
+        512,
+        512
+      ],
+      "max_concentration": 1.0,
+      "mean_concentration": 0.28390830755233765,
+      "active_area_ratio": 0.3205413818359375
+    },
+    "scene_name": "单中心模型_规则",
+    "rl_attempt": {
+      "success": false,
+      "max_concentration": 0.915298342704773,
+      "steps_taken": 24
+    }
+  }
+}

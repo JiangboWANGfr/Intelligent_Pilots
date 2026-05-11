@@ -1,0 +1,62 @@
+[
+  {
+    "scene_name": "随机旋转GMM_1中心_seed19000_3922",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/01_随机旋转GMM_1中心_seed19000_3922_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/01_随机旋转GMM_1中心_seed19000_3922_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/01_随机旋转GMM_1中心_seed19000_3922_path_overlay.png",
+    "max_concentration": 1.0,
+    "mean_concentration": 0.06385157257318497,
+    "safety_threshold": 0.2972579699197902,
+    "danger_threshold": 0.4458869548796853
+  },
+  {
+    "scene_name": "随机旋转GMM_3中心_seed19001_98595",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/02_随机旋转GMM_3中心_seed19001_98595_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/02_随机旋转GMM_3中心_seed19001_98595_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/02_随机旋转GMM_3中心_seed19001_98595_path_overlay.png",
+    "max_concentration": 0.3376274108886719,
+    "mean_concentration": 0.008671343326568604,
+    "safety_threshold": 0.3208671930995851,
+    "danger_threshold": 0.48130078964937767
+  },
+  {
+    "scene_name": "随机旋转GMM_2中心_seed19002_26373",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/03_随机旋转GMM_2中心_seed19002_26373_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/03_随机旋转GMM_2中心_seed19002_26373_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/03_随机旋转GMM_2中心_seed19002_26373_path_overlay.png",
+    "max_concentration": 0.6966883540153503,
+    "mean_concentration": 0.01281710620969534,
+    "safety_threshold": 0.3258552199133836,
+    "danger_threshold": 0.48878282987007543
+  },
+  {
+    "scene_name": "随机旋转GMM_2中心_seed19003_19046",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/04_随机旋转GMM_2中心_seed19003_19046_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/04_随机旋转GMM_2中心_seed19003_19046_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/04_随机旋转GMM_2中心_seed19003_19046_path_overlay.png",
+    "max_concentration": 0.7603970766067505,
+    "mean_concentration": 0.030465053394436836,
+    "safety_threshold": 0.2919080323331675,
+    "danger_threshold": 0.4378620484997512
+  },
+  {
+    "scene_name": "随机旋转GMM_4中心_seed19004_48144",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/05_随机旋转GMM_4中心_seed19004_48144_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/05_随机旋转GMM_4中心_seed19004_48144_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/05_随机旋转GMM_4中心_seed19004_48144_path_overlay.png",
+    "max_concentration": 0.3392448425292969,
+    "mean_concentration": 0.012102968990802765,
+    "safety_threshold": 0.3387681042903463,
+    "danger_threshold": 0.5081521564355195
+  },
+  {
+    "scene_name": "随机旋转GMM_2中心_seed19005_38801",
+    "concentration_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/06_随机旋转GMM_2中心_seed19005_38801_concentration.png",
+    "danger_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/06_随机旋转GMM_2中心_seed19005_38801_danger.png",
+    "path_overlay_path": "models/large_slow_dynamic_ash_turn_controller_v2/pre_training_ash_maps/06_随机旋转GMM_2中心_seed19005_38801_path_overlay.png",
+    "max_concentration": 0.753789484500885,
+    "mean_concentration": 0.03763072192668915,
+    "safety_threshold": 0.29075810491255155,
+    "danger_threshold": 0.4361371573688273
+  }
+]

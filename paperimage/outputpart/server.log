@@ -1,0 +1,51 @@
+============================================================
+Volcanic Ash Avoidance System - Web Server Starting
+============================================================
+Access URL: http://localhost:5050
+API Endpoints:
+  GET  /api/presets      - Get preset configs
+  POST /api/generate     - Generate images
+  POST /api/train        - Train model
+  POST /api/plan         - Plan path
+  POST /api/multi-plan   - Multi-constraint planning
+  POST /api/validate-image - Validate an image-derived ash scene
+  POST /api/scenes/import-image - Import and save a real ash scene
+  POST /api/scenes/generated - Generate and save an ash scene
+  POST /api/cases/run    - Run, save, and replay a planning case
+  POST /api/analyze      - Data analysis
+============================================================
+ * Serving Flask app 'server'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5050
+ * Running on http://192.168.31.147:5050
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [09/May/2026 13:15:03] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/May/2026 13:15:03] "GET /api/output/current_config.json HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:03] "GET /api/cases HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:03] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:07] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:08] "GET /api/output/web_scenes/ash_scene_20260509_131507_924971/concentration_classified_preview.png?t=1778303707999 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:08] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:10] "GET /api/output/web_scenes/ash_scene_20260509_131507_924971/concentration_overlay.png?t=1778303707999 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:24] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:25] "GET /api/output/web_scenes/ash_scene_20260509_131507_924971/concentration_overlay.png?t=1778303725059 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:29] "GET /api/output/web_scenes/ash_scene_20260509_131507_924971/concentration_overlay.png?t=1778303729349 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:44] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:51] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:51] "GET /api/output/web_scenes/ash_scene_20260509_131551_452640/concentration_classified_preview.png?t=1778303751530 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:51] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:15:51] "GET /api/output/web_scenes/ash_scene_20260509_131551_452640/concentration_overlay.png?t=1778303751531 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:16:14] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:16:35] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:16:52] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:14] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:37] "POST /api/cases/run HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:44] "POST /api/scenes/generated HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:44] "GET /api/output/web_scenes/ash_scene_20260509_131744_743991/concentration_classified_preview.png?t=1778303864818 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:44] "GET /api/output/web_scenes/ash_scene_20260509_131744_743991/concentration_overlay.png?t=1778303864818 HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:17:44] "GET /api/scenes HTTP/1.1" 200 -
+127.0.0.1 - - [09/May/2026 13:18:11] "POST /api/cases/run HTTP/1.1" 200 -
+ocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

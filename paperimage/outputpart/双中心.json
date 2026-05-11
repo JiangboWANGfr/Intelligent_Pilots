@@ -1,0 +1,43 @@
+{
+  "model_type": "double_center",
+  "num_centers": 2,
+  "cloud_size": 120.0,
+  "concentration_threshold": 0.25,
+  "mass_ratio": 0.8,
+  "image_size": [
+    512,
+    512
+  ],
+  "geo_center_lat": 35.0,
+  "geo_center_lon": 120.0,
+  "geo_span_lat": 2.0,
+  "geo_span_lon": 2.0,
+  "success_threshold": 20.0,
+  "centers": [
+    {
+      "x": 200.0,
+      "y": 220.0,
+      "weight": 0.6,
+      "std_x": 50.0,
+      "std_y": 45.0
+    },
+    {
+      "x": 320.0,
+      "y": 290.0,
+      "weight": 0.4,
+      "std_x": 55.0,
+      "std_y": 50.0
+    }
+  ],
+  "scene_name": "双中心_复杂扩散",
+  "training_scene_names": [],
+  "enable_irregular": true,
+  "turbulence_scale": 0.18,
+  "wind_direction": 135.0,
+  "wind_strength": 0.35,
+  "add_fractal_boundary": true,
+  "fractal_dimension": 1.6,
+  "add_filaments": true,
+  "num_filaments": 8,
+  "random_seed": 456
+}

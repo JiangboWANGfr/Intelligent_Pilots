@@ -1,0 +1,350 @@
+{
+  "model_dir": "models/large_slow_dynamic_ash_turn_controller_v2",
+  "config": "output/current_config.json",
+  "scene": [
+    "随机旋转GMM_演示场景_01_seed27000"
+  ],
+  "random_ash_scenes": true,
+  "dynamic_ash": true,
+  "random_centers_range": [
+    3,
+    6
+  ],
+  "random_demo_scenes": 1,
+  "vary_scene_per_checkpoint": true,
+  "metric_plots": [
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/reward_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/learning_rate_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/loss_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/actor_critic_loss_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/success_rate_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/ash_exposure_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/cross_track_error_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/final_distance_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/path_progress_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/safety_factor_curve.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/training_dashboard.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/safety_factor_vs_exposure.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/safety_factor_bins.png",
+    "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/metrics/safety_factor_timeline.png"
+  ],
+  "animations": [
+    {
+      "label": "ep0050",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep50.pth",
+      "success": false,
+      "total_reward": -1407.6520056431182,
+      "max_concentration": 0.00010050994023913518,
+      "final_distance": 497.367431640625,
+      "avoidance_demo_candidate": {
+        "seed": 27104,
+        "scene_counter": 54,
+        "score": 13.312109530265024,
+        "direct_max_risk": 0.025091057643294334,
+        "direct_mean_risk": 0.0006579232285730541,
+        "path_max_risk": 0.0016191171016544104,
+        "path_mean_risk": 6.24065267248766e-05,
+        "direct_distance": 616.8646240234375,
+        "path_length": 649.3184204101562,
+        "detour_ratio": 1.0526108892013326,
+        "start_coordinate": [
+          202.0,
+          93.0
+        ],
+        "target_coordinate": [
+          63.0,
+          694.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0050",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 140,
+      "sampled_waypoint_count": 128,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0050/ep0050.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0050/ep0050.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0050/随机旋转GMM_演示场景_01_seed27000_ep0050_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0050"
+    },
+    {
+      "label": "ep0100",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep100.pth",
+      "success": false,
+      "total_reward": -1866.9725606225447,
+      "max_concentration": 0.002576261991634965,
+      "final_distance": 652.6309204101562,
+      "avoidance_demo_candidate": {
+        "seed": 27342,
+        "scene_counter": 82,
+        "score": 13.790628380420095,
+        "direct_max_risk": 0.023462286219000816,
+        "direct_mean_risk": 0.00048577721463516355,
+        "path_max_risk": 0.0059378016740083694,
+        "path_mean_risk": 0.00012453516787431826,
+        "direct_distance": 643.8447265625,
+        "path_length": 680.058349609375,
+        "detour_ratio": 1.0562458952490303,
+        "start_coordinate": [
+          102.0,
+          682.0
+        ],
+        "target_coordinate": [
+          308.0,
+          72.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0100",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 140,
+      "sampled_waypoint_count": 128,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0100/ep0100.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0100/ep0100.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0100/随机旋转GMM_演示场景_01_seed27000_ep0100_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0100"
+    },
+    {
+      "label": "ep0200",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep200.pth",
+      "success": true,
+      "total_reward": 1029.944329089407,
+      "max_concentration": 0.009368633851408958,
+      "final_distance": 16.432228088378906,
+      "avoidance_demo_candidate": {
+        "seed": 27627,
+        "scene_counter": 107,
+        "score": 22.586924283087388,
+        "direct_max_risk": 0.17533716559410095,
+        "direct_mean_risk": 0.011308230459690094,
+        "path_max_risk": 0.017674004659056664,
+        "path_mean_risk": 0.0005093002434353842,
+        "direct_distance": 843.5431518554688,
+        "path_length": 909.567138671875,
+        "detour_ratio": 1.0782698391554468,
+        "start_coordinate": [
+          61.0,
+          585.0
+        ],
+        "target_coordinate": [
+          714.0,
+          51.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0200",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 111,
+      "sampled_waypoint_count": 99,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0200/ep0200.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0200/ep0200.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0200/随机旋转GMM_演示场景_01_seed27000_ep0200_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0200"
+    },
+    {
+      "label": "ep0300",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep300.pth",
+      "success": true,
+      "total_reward": 713.7035982316681,
+      "max_concentration": 0.003619573311880231,
+      "final_distance": 18.888723373413086,
+      "avoidance_demo_candidate": {
+        "seed": 27792,
+        "scene_counter": 12,
+        "score": 13.705167518265991,
+        "direct_max_risk": 0.005761507898569107,
+        "direct_mean_risk": 0.00018220063066110015,
+        "path_max_risk": 0.0015523408073931932,
+        "path_mean_risk": 7.784509108737844e-05,
+        "direct_distance": 558.4586181640625,
+        "path_length": 603.2081909179688,
+        "detour_ratio": 1.0801305079703503,
+        "start_coordinate": [
+          254.0,
+          148.0
+        ],
+        "target_coordinate": [
+          78.0,
+          678.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0300",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 77,
+      "sampled_waypoint_count": 65,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0300/ep0300.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0300/ep0300.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0300/随机旋转GMM_演示场景_01_seed27000_ep0300_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0300"
+    },
+    {
+      "label": "ep0400",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep400.pth",
+      "success": true,
+      "total_reward": 765.0805969632197,
+      "max_concentration": 0.010798492468893528,
+      "final_distance": 16.449275970458984,
+      "avoidance_demo_candidate": {
+        "seed": 28191,
+        "scene_counter": 151,
+        "score": 14.038860430146933,
+        "direct_max_risk": 0.007536830380558968,
+        "direct_mean_risk": 0.00016955495811998844,
+        "path_max_risk": 0.00346334557980299,
+        "path_mean_risk": 0.00012078413224875072,
+        "direct_distance": 616.3975830078125,
+        "path_length": 660.7544555664062,
+        "detour_ratio": 1.0719614641286346,
+        "start_coordinate": [
+          247.0,
+          98.0
+        ],
+        "target_coordinate": [
+          86.0,
+          693.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0400",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 84,
+      "sampled_waypoint_count": 72,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0400/ep0400.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0400/ep0400.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0400/随机旋转GMM_演示场景_01_seed27000_ep0400_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0400"
+    },
+    {
+      "label": "ep0500",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/checkpoint_ep500.pth",
+      "success": true,
+      "total_reward": 709.6854469420708,
+      "max_concentration": 0.005136589985340834,
+      "final_distance": 15.091086387634277,
+      "avoidance_demo_candidate": {
+        "seed": 28376,
+        "scene_counter": 76,
+        "score": 14.002029042992456,
+        "direct_max_risk": 0.017724506556987762,
+        "direct_mean_risk": 0.0006911240634508431,
+        "path_max_risk": 0.0016191171016544104,
+        "path_mean_risk": 7.284704219469801e-05,
+        "direct_distance": 550.9736938476562,
+        "path_length": 595.7254638671875,
+        "detour_ratio": 1.0812230611356648,
+        "start_coordinate": [
+          73.0,
+          663.0
+        ],
+        "target_coordinate": [
+          237.0,
+          137.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_ep0500",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 77,
+      "sampled_waypoint_count": 65,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0500/ep0500.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0500/ep0500.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0500/随机旋转GMM_演示场景_01_seed27000_ep0500_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/ep0500"
+    },
+    {
+      "label": "final",
+      "model_path": "models/large_slow_dynamic_ash_turn_controller_v2/final_model.pth",
+      "success": true,
+      "total_reward": 781.7281121697255,
+      "max_concentration": 0.004611657932400703,
+      "final_distance": 15.853802680969238,
+      "avoidance_demo_candidate": {
+        "seed": 1000028053,
+        "scene_counter": 93,
+        "score": 14.519108203502686,
+        "direct_max_risk": 0.010269170626997948,
+        "direct_mean_risk": 0.0002134087699232623,
+        "path_max_risk": 0.0016191171016544104,
+        "path_mean_risk": 7.047303064497904e-05,
+        "direct_distance": 633.1334838867188,
+        "path_length": 679.7786865234375,
+        "detour_ratio": 1.0736735677765301,
+        "start_coordinate": [
+          80.0,
+          712.0
+        ],
+        "target_coordinate": [
+          273.0,
+          109.0
+        ],
+        "forced_start_target": null,
+        "candidate_count": 160,
+        "qualified_candidate_count": 0
+      },
+      "scene_name": "随机旋转GMM_演示场景_01_seed27000_final",
+      "planning_method": "rl_checkpoint",
+      "fps": 12,
+      "frame_count": 87,
+      "sampled_waypoint_count": 75,
+      "resolution": [
+        2058,
+        1536
+      ],
+      "gif_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/final/final.gif",
+      "video_path": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/final/final.mp4",
+      "video_codec": "mp4v",
+      "frames_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/final/随机旋转GMM_演示场景_01_seed27000_final_frames",
+      "output_dir": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/随机旋转GMM_演示场景_01_seed27000/final"
+    }
+  ],
+  "safety_factor_comparison": null,
+  "stitched_progress_gif": "output/large_slow_dynamic_ash_varied_avoidance_assets_v2/animations/varied_avoidance_training_progress.gif"
+}

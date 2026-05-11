@@ -1,0 +1,36 @@
+{
+  "model_type": "single_center",
+  "num_centers": 1,
+  "cloud_size": 80.0,
+  "concentration_threshold": 0.3,
+  "mass_ratio": 0.85,
+  "image_size": [
+    512,
+    512
+  ],
+  "geo_center_lat": 35.0,
+  "geo_center_lon": 120.0,
+  "geo_span_lat": 2.0,
+  "geo_span_lon": 2.0,
+  "success_threshold": 20.0,
+  "centers": [
+    {
+      "x": 256.0,
+      "y": 256.0,
+      "weight": 1.0,
+      "std_x": 60.0,
+      "std_y": 60.0
+    }
+  ],
+  "scene_name": "单中心模型_规则",
+  "training_scene_names": [],
+  "enable_irregular": true,
+  "turbulence_scale": 0.15,
+  "wind_direction": 45.0,
+  "wind_strength": 0.3,
+  "add_fractal_boundary": true,
+  "fractal_dimension": 1.5,
+  "add_filaments": true,
+  "num_filaments": 5,
+  "random_seed": 666
+}
